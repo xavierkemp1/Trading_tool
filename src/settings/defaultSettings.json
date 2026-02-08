@@ -1,0 +1,25 @@
+{
+  "watchlistSymbols": ["NVDA", "AVGO", "RTX", "TSLA"],
+  "refreshSchedule": "daily",
+  "benchmarks": ["SPY", "QQQ", "GLD"],
+  "actionBadgeRules": {
+    "smaShort": 50,
+    "smaLong": 200,
+    "atrMultipleForReduce": 2,
+    "rsiOverbought": 70,
+    "exitBelowSma200": false
+  },
+  "reddit": {
+    "enabled": false,
+    "sources": ["wallstreetbets", "stocks", "options"],
+    "cacheHours": 6
+  },
+  "openai": {
+    "enabled": false,
+    "model": "gpt-4o-mini"
+  },
+  "riskBands": {
+    "maxPositionPct": 20,
+    "maxThemePct": 35
+  }
+}
