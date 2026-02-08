@@ -59,11 +59,16 @@ interface RateLimitTracker {
   };
 }
 
-// ============= RATE LIMITING & CACHING =============
+// ============= CONSTANTS =============
 
-const rateLimits: RateLimitTracker = {};
 const CACHE_DURATION_PRICES = 5 * 60 * 1000; // 5 minutes
 const CACHE_DURATION_FUNDAMENTALS = 7 * 24 * 60 * 60 * 1000; // 1 week
+const API_DELAY_MS = 1000; // Delay between API calls to avoid overwhelming
+const SYMBOL_DELAY_MS = 500; // Delay between processing different symbols
+
+// ============= RATE LIMITING =============
+
+const rateLimits: RateLimitTracker = {}
 
 /**
  * Check if we can make an API call within rate limits
@@ -90,6 +95,14 @@ function isCacheFresh(timestamp: string, maxAge: number): boolean {
   const cacheTime = new Date(timestamp).getTime();
   const now = Date.now();
   return (now - cacheTime) < maxAge;
+}
+
+/**
+ * Safely parse float, returning undefined for NaN
+ */
+function parseFloatSafe(value: any): number | undefined {
+  const parsed = parseFloat(value);
+  return isNaN(parsed) ? undefined : parsed;
 }
 
 // ============= YFINANCE API (Primary - Free, No API Key) =============
@@ -532,15 +545,15 @@ export async function fetchFundamentals(symbol: string): Promise<FundamentalsRes
   
   if (source === 'alphavantage') {
     const data = response.data;
-    fundamentals.market_cap = parseFloat(data.MarketCapitalization) || undefined;
-    fundamentals.trailing_pe = parseFloat(data.PERatio) || undefined;
-    fundamentals.forward_pe = parseFloat(data.ForwardPE) || undefined;
-    fundamentals.price_to_sales = parseFloat(data.PriceToSalesRatioTTM) || undefined;
-    fundamentals.profit_margins = parseFloat(data.ProfitMargin) || undefined;
-    fundamentals.revenue_growth = parseFloat(data.QuarterlyRevenueGrowthYOY) || undefined;
-    fundamentals.earnings_growth = parseFloat(data.QuarterlyEarningsGrowthYOY) || undefined;
-    fundamentals.dividend_yield = parseFloat(data.DividendYield) || undefined;
-    fundamentals.beta = parseFloat(data.Beta) || undefined;
+    fundamentals.market_cap = parseFloatSafe(data.MarketCapitalization);
+    fundamentals.trailing_pe = parseFloatSafe(data.PERatio);
+    fundamentals.forward_pe = parseFloatSafe(data.ForwardPE);
+    fundamentals.price_to_sales = parseFloatSafe(data.PriceToSalesRatioTTM);
+    fundamentals.profit_margins = parseFloatSafe(data.ProfitMargin);
+    fundamentals.revenue_growth = parseFloatSafe(data.QuarterlyRevenueGrowthYOY);
+    fundamentals.earnings_growth = parseFloatSafe(data.QuarterlyEarningsGrowthYOY);
+    fundamentals.dividend_yield = parseFloatSafe(data.DividendYield);
+    fundamentals.beta = parseFloatSafe(data.Beta);
     
     // Update symbol info
     upsertSymbol({
@@ -620,7 +633,7 @@ export async function refreshAllData(symbols: string[]): Promise<{
       await fetchMarketData(symbol);
       
       // Add small delay to avoid overwhelming APIs
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, API_DELAY_MS));
       
       try {
         await fetchFundamentals(symbol);
@@ -638,7 +651,7 @@ export async function refreshAllData(symbols: string[]): Promise<{
     }
     
     // Add delay between symbols
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, SYMBOL_DELAY_MS));
   }
   
   return { successful, failed };
