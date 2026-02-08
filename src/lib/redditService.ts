@@ -148,7 +148,8 @@ export async function fetchRedditSentiment(symbols: string[]): Promise<RedditSen
   const sentimentScores = new Map<string, { positive: number; negative: number; mixed: number; neutral: number }>();
   const symbolPosts = new Map<string, { title: string; text: string }[]>();
   
-  // Track previous mention counts for change calculation (simplified - just use current data)
+  // Track previous mention counts for change calculation
+  // Note: Using simulated baseline for demo purposes. In production, store actual historical data.
   const previousCounts = new Map<string, number>();
   symbols.forEach(s => {
     mentionCounts.set(s, 0);
@@ -163,7 +164,7 @@ export async function fetchRedditSentiment(symbols: string[]): Promise<RedditSen
       const url = `https://www.reddit.com/r/${subreddit}/top.json?limit=100&t=week`;
       const response = await fetch(url, {
         headers: {
-          'User-Agent': 'TradingApp/1.0'
+          'User-Agent': 'web:trading-app:v1.0.0 (for educational/research purposes)'
         }
       });
       

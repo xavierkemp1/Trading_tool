@@ -43,6 +43,7 @@ export async function generatePositionReview(symbol: string): Promise<string> {
     throw new Error('OpenAI integration is disabled in settings');
   }
   
+  // Note: API key is exposed in client-side code. For production, use a backend proxy.
   const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error('OpenAI API key not configured. Set VITE_OPENAI_API_KEY in your environment.');
@@ -153,6 +154,7 @@ export async function generatePortfolioReview(): Promise<string> {
     throw new Error('OpenAI integration is disabled in settings');
   }
   
+  // Note: API key is exposed in client-side code. For production, use a backend proxy.
   const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error('OpenAI API key not configured. Set VITE_OPENAI_API_KEY in your environment.');
