@@ -1,5 +1,9 @@
+import { useState, useEffect, useCallback } from 'react';
 import SectionHeader from '../components/SectionHeader';
-import { watchlist } from '../data/mock';
+import WatchlistManager from '../components/WatchlistManager';
+import { getAllWatchlist, getLatestPrice, getSymbol } from '../lib/db';
+import { calculateIndicators } from '../lib/dataService';
+import type { WatchlistItem } from '../lib/types';
 
 const quantFilters = [
   { label: 'Above SMA200', value: 'On' },
@@ -33,9 +37,106 @@ const narrativeClusters = [
 ];
 
 export default function ExploreIdeas() {
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadWatchlist = useCallback(async () => {
+    setLoading(true);
+    try {
+      const dbWatchlist = getAllWatchlist();
+      const items: WatchlistItem[] = [];
+      
+      for (const entry of dbWatchlist) {
+        const latestPrice = getLatestPrice(entry.symbol);
+        const symbolInfo = getSymbol(entry.symbol);
+        
+        if (!latestPrice) {
+          console.warn(`No price data for ${entry.symbol}`);
+          continue;
+        }
+        
+        let indicators;
+        try {
+          indicators = await calculateIndicators(entry.symbol);
+        } catch (err) {
+          console.warn(`Failed to calculate indicators for ${entry.symbol}:`, err);
+          continue;
+        }
+        
+        const aboveSma200 = indicators.sma200 ? latestPrice.close > indicators.sma200 : false;
+        const atrPct = indicators.atr14 ? (indicators.atr14 / latestPrice.close) * 100 : 0;
+        
+        items.push({
+          symbol: entry.symbol,
+          name: symbolInfo?.name || entry.symbol,
+          thesisTag: entry.thesis_tag || 'Other',
+          timeHorizon: 'Months', // Default
+          notes: entry.notes || '',
+          last: latestPrice.close,
+          aboveSma200,
+          atrPct
+        });
+      }
+      
+      setWatchlist(items);
+    } catch (err) {
+      console.error('Failed to load watchlist:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadWatchlist();
+  }, [loadWatchlist]);
+
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader title="Explore / New Ideas" subtitle="Shortlist only. Cap candidates to 50." />
+
+      <WatchlistManager onUpdate={loadWatchlist} />
+
+      <div className="card">
+        <SectionHeader title="Watchlist" subtitle="Your tracked ideas" />
+        {loading ? (
+          <div className="mt-4 text-sm text-slate-400">Loading watchlist...</div>
+        ) : watchlist.length === 0 ? (
+          <div className="mt-4 text-sm text-slate-400">No watchlist items yet. Add symbols above to track them.</div>
+        ) : (
+          <div className="mt-4">
+            <table className="table-grid">
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Name</th>
+                  <th>Last</th>
+                  <th>ATR%</th>
+                  <th>SMA200</th>
+                  <th>Thesis</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {watchlist.map((item) => (
+                  <tr key={item.symbol}>
+                    <td className="font-semibold text-slate-100">{item.symbol}</td>
+                    <td>{item.name}</td>
+                    <td>${item.last.toFixed(2)}</td>
+                    <td>{item.atrPct.toFixed(1)}%</td>
+                    <td>{item.aboveSma200 ? 'Above' : 'Below'}</td>
+                    <td>
+                      <span className="rounded-full border border-slate-700 px-2 py-0.5 text-xs text-slate-300">
+                        {item.thesisTag}
+                      </span>
+                    </td>
+                    <td className="text-xs text-slate-400">{item.notes || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <div className="card">
         <SectionHeader title="Quant screen" subtitle="Objective filters" />
@@ -46,35 +147,8 @@ export default function ExploreIdeas() {
             </div>
           ))}
         </div>
-        <div className="mt-4">
-          <table className="table-grid">
-            <thead>
-              <tr>
-                <th>Symbol</th>
-                <th>Name</th>
-                <th>Last</th>
-                <th>ATR%</th>
-                <th>SMA200</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {watchlist.map((item) => (
-                <tr key={item.symbol}>
-                  <td className="font-semibold text-slate-100">{item.symbol}</td>
-                  <td>{item.name}</td>
-                  <td>${item.last.toFixed(2)}</td>
-                  <td>{item.atrPct.toFixed(1)}%</td>
-                  <td>{item.aboveSma200 ? 'Above' : 'Below'}</td>
-                  <td>
-                    <button className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800">
-                      Add to watchlist
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mt-4 text-sm text-slate-400">
+          Quant screening feature coming soon. Use the watchlist manager above to track specific symbols.
         </div>
       </div>
 
