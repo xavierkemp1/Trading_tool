@@ -19,7 +19,7 @@ export async function initDatabase(): Promise<Database> {
     // Initialize SQL.js
     if (!sqlJs) {
       sqlJs = await initSqlJs({
-        locateFile: (file: string) => `https://sql.js.org/dist/${file}`
+        locateFile: (file: string) => `/${file}`
       });
     }
 
@@ -131,7 +131,7 @@ export async function importDatabase(file: File): Promise<void> {
     
     if (!sqlJs) {
       sqlJs = await initSqlJs({
-        locateFile: (file: string) => `https://sql.js.org/dist/${file}`
+        locateFile: (file: string) => `/${file}`
       });
     }
 

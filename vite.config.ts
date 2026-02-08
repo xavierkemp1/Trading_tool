@@ -5,7 +5,16 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    host: true
+    host: true,
+    fs: {
+      strict: false
+    }
   },
-  assetsInclude: ['**/*.sql']
+  assetsInclude: ['**/*.sql', '**/*.wasm'],
+  build: {
+    target: 'esnext',
+    rollupOptions: {
+      external: []
+    }
+  }
 });
