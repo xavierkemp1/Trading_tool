@@ -15,11 +15,11 @@ This directory contains the SQLite database integration for the trading applicat
 ```typescript
 import { initDatabase, addPosition, getAllPositions } from './lib/db';
 
-// Initialize the database (call once at app startup)
+// Initialize the database (call once at app startup - this is async)
 await initDatabase();
 
-// Add a position
-await addPosition({
+// Add a position (synchronous operation)
+addPosition({
   symbol: 'AAPL',
   qty: 100,
   avg_cost: 150.50,
@@ -28,8 +28,8 @@ await addPosition({
   time_horizon: 'Years'
 });
 
-// Get all positions
-const positions = await getAllPositions();
+// Get all positions (synchronous operation)
+const positions = getAllPositions();
 ```
 
 ## Database Tables
@@ -103,70 +103,70 @@ await importDatabase(file: File): Promise<void>
 ### Symbols Operations
 
 ```typescript
-await upsertSymbol(symbolData: Symbol): Promise<void>
-await getSymbol(symbol: string): Promise<Symbol | null>
-await getAllSymbols(): Promise<Symbol[]>
+upsertSymbol(symbolData: Symbol): void
+getSymbol(symbol: string): Symbol | null
+getAllSymbols(): Symbol[]
 ```
 
 ### Positions Operations
 
 ```typescript
-await addPosition(position: Omit<Position, 'created_at' | 'updated_at'>): Promise<void>
-await updatePosition(symbol: string, updates: Partial<Position>): Promise<void>
-await deletePosition(symbol: string): Promise<void>
-await getAllPositions(): Promise<Position[]>
-await getPositionBySymbol(symbol: string): Promise<Position | null>
+addPosition(position: Omit<Position, 'created_at' | 'updated_at'>): void
+updatePosition(symbol: string, updates: Partial<Position>): void
+deletePosition(symbol: string): void
+getAllPositions(): Position[]
+getPositionBySymbol(symbol: string): Position | null
 ```
 
 ### Watchlist Operations
 
 ```typescript
-await addToWatchlist(entry: Omit<WatchlistEntry, 'added_at'>): Promise<void>
-await deleteFromWatchlist(symbol: string): Promise<void>
-await getAllWatchlist(): Promise<WatchlistEntry[]>
-await getWatchlistBySymbol(symbol: string): Promise<WatchlistEntry | null>
+addToWatchlist(entry: Omit<WatchlistEntry, 'added_at'>): void
+deleteFromWatchlist(symbol: string): void
+getAllWatchlist(): WatchlistEntry[]
+getWatchlistBySymbol(symbol: string): WatchlistEntry | null
 ```
 
 ### Prices Operations
 
 ```typescript
-await addPrices(prices: Price[]): Promise<void>
-await getPricesForSymbol(symbol: string, limit?: number): Promise<Price[]>
-await getLatestPrice(symbol: string): Promise<Price | null>
-await deletePricesForSymbol(symbol: string): Promise<void>
+addPrices(prices: Price[]): void
+getPricesForSymbol(symbol: string, limit?: number): Price[]
+getLatestPrice(symbol: string): Price | null
+deletePricesForSymbol(symbol: string): void
 ```
 
 ### Fundamentals Operations
 
 ```typescript
-await upsertFundamentals(data: Fundamentals): Promise<void>
-await getFundamentals(symbol: string): Promise<Fundamentals | null>
-await deleteFundamentals(symbol: string): Promise<void>
+upsertFundamentals(data: Fundamentals): void
+getFundamentals(symbol: string): Fundamentals | null
+deleteFundamentals(symbol: string): void
 ```
 
 ### Journal Operations
 
 ```typescript
-await addJournalEntry(entry: Omit<JournalEntry, 'id'>): Promise<number>
-await getAllJournalEntries(limit?: number): Promise<JournalEntry[]>
-await getJournalEntriesBySymbol(symbol: string): Promise<JournalEntry[]>
-await deleteJournalEntry(id: number): Promise<void>
-await updateJournalEntry(id: number, updates: Partial<JournalEntry>): Promise<void>
+addJournalEntry(entry: Omit<JournalEntry, 'id'>): number
+getAllJournalEntries(limit?: number): JournalEntry[]
+getJournalEntriesBySymbol(symbol: string): JournalEntry[]
+deleteJournalEntry(id: number): void
+updateJournalEntry(id: number, updates: Partial<JournalEntry>): void
 ```
 
 ### AI Reviews Operations
 
 ```typescript
-await addReview(review: Omit<AIReview, 'id'>): Promise<number>
-await getReviews(symbol?: string, limit?: number): Promise<AIReview[]>
-await deleteReview(id: number): Promise<void>
+addReview(review: Omit<AIReview, 'id'>): number
+getReviews(symbol?: string, limit?: number): AIReview[]
+deleteReview(id: number): void
 ```
 
 ## Persistence
 
 The database automatically persists to `localStorage` under the key `trading_app_db`. The data is stored as a base64-encoded binary blob. 
 
-**Important:** Call `saveDatabase()` after batch operations or when you want to ensure changes are persisted. Most operations automatically call `saveDatabase()` internally.
+**Important:** Most database operations automatically call `saveDatabase()` internally to persist changes. Only `initDatabase()` and database import/export operations are async.
 
 ## Error Handling
 
@@ -174,7 +174,7 @@ All database operations throw errors if they fail. Wrap calls in try-catch block
 
 ```typescript
 try {
-  await addPosition({ ... });
+  addPosition({ ... });
 } catch (error) {
   console.error('Failed to add position:', error);
 }

@@ -26,7 +26,7 @@ export async function exampleUsage() {
     console.log('✓ Database initialized');
 
     // 2. Add a symbol
-    await upsertSymbol({
+    upsertSymbol({
       symbol: 'AAPL',
       name: 'Apple Inc.',
       asset_class: 'Stock',
@@ -37,7 +37,7 @@ export async function exampleUsage() {
     console.log('✓ Symbol added');
 
     // 3. Add a position
-    await addPosition({
+    addPosition({
       symbol: 'AAPL',
       qty: 100,
       avg_cost: 150.50,
@@ -51,7 +51,7 @@ export async function exampleUsage() {
     console.log('✓ Position added');
 
     // 4. Add to watchlist
-    await addToWatchlist({
+    addToWatchlist({
       symbol: 'MSFT',
       thesis_tag: 'Growth',
       notes: 'Cloud computing leader, AI opportunities'
@@ -59,7 +59,7 @@ export async function exampleUsage() {
     console.log('✓ Watchlist item added');
 
     // 5. Add price data
-    await addPrices([
+    addPrices([
       {
         symbol: 'AAPL',
         date: '2024-01-15',
@@ -82,7 +82,7 @@ export async function exampleUsage() {
     console.log('✓ Price data added');
 
     // 6. Add a journal entry
-    await addJournalEntry({
+    addJournalEntry({
       created_at: new Date().toISOString(),
       type: 'trade',
       symbol: 'AAPL',
@@ -97,16 +97,16 @@ export async function exampleUsage() {
     console.log('✓ Journal entry added');
 
     // 7. Retrieve data
-    const positions = await getAllPositions();
+    const positions = getAllPositions();
     console.log('✓ Positions:', positions);
 
-    const watchlist = await getAllWatchlist();
+    const watchlist = getAllWatchlist();
     console.log('✓ Watchlist:', watchlist);
 
-    const latestPrice = await getLatestPrice('AAPL');
+    const latestPrice = getLatestPrice('AAPL');
     console.log('✓ Latest price:', latestPrice);
 
-    const journalEntries = await getAllJournalEntries(10);
+    const journalEntries = getAllJournalEntries(10);
     console.log('✓ Journal entries:', journalEntries);
 
     return {
