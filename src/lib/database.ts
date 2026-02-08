@@ -1,10 +1,11 @@
-import initSqlJs, { Database } from 'sql.js';
+import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
+import schemaSQL from './db/migrations/001_init.sql';
 
 const DB_KEY = 'trading_app_db';
 const DB_VERSION = 1;
 
 let dbInstance: Database | null = null;
-let sqlJs: any = null;
+let sqlJs: SqlJsStatic | null = null;
 
 /**
  * Initialize sql.js and load the database
@@ -56,17 +57,11 @@ export async function initDatabase(): Promise<Database> {
 }
 
 /**
- * Load schema from SQL file
+ * Load schema from imported SQL file
  */
 async function loadSchema(db: Database): Promise<void> {
   try {
-    const response = await fetch('/src/lib/db/migrations/001_init.sql');
-    if (!response.ok) {
-      throw new Error('Failed to load schema file');
-    }
-    
-    const schema = await response.text();
-    db.exec(schema);
+    db.exec(schemaSQL);
     
     // Store version info
     db.exec(`CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value TEXT)`);

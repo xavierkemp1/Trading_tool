@@ -108,7 +108,7 @@ function executeInsert(query: string, params: any[] = []): void {
 
 // ============= SYMBOLS =============
 
-export async function upsertSymbol(symbolData: Symbol): Promise<void> {
+export function upsertSymbol(symbolData: Symbol): void {
   const query = `
     INSERT INTO symbols (symbol, name, asset_class, currency, sector, industry)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -130,7 +130,7 @@ export async function upsertSymbol(symbolData: Symbol): Promise<void> {
   ]);
 }
 
-export async function getSymbol(symbol: string): Promise<Symbol | null> {
+export function getSymbol(symbol: string): Symbol | null {
   const results = executeQuery<Symbol>(
     'SELECT * FROM symbols WHERE symbol = ?',
     [symbol]
@@ -138,13 +138,13 @@ export async function getSymbol(symbol: string): Promise<Symbol | null> {
   return results.length > 0 ? results[0] : null;
 }
 
-export async function getAllSymbols(): Promise<Symbol[]> {
+export function getAllSymbols(): Symbol[] {
   return executeQuery<Symbol>('SELECT * FROM symbols ORDER BY symbol');
 }
 
 // ============= POSITIONS =============
 
-export async function addPosition(position: Omit<Position, 'created_at' | 'updated_at'>): Promise<void> {
+export function addPosition(position: Omit<Position, 'created_at' | 'updated_at'>): void {
   const now = new Date().toISOString();
   const query = `
     INSERT INTO positions (symbol, qty, avg_cost, currency, thesis_tag, time_horizon, thesis, invalidation, target, created_at, updated_at)
@@ -166,17 +166,28 @@ export async function addPosition(position: Omit<Position, 'created_at' | 'updat
   ]);
 }
 
-export async function updatePosition(symbol: string, updates: Partial<Omit<Position, 'symbol' | 'created_at'>>): Promise<void> {
+export function updatePosition(symbol: string, updates: Partial<Omit<Position, 'symbol' | 'created_at'>>): void {
   const now = new Date().toISOString();
+  
+  // Validate field names against allowlist
+  const allowedFields = new Set([
+    'qty', 'avg_cost', 'currency', 'thesis_tag', 'time_horizon', 
+    'thesis', 'invalidation', 'target', 'updated_at'
+  ]);
+  
   const fields: string[] = [];
   const values: any[] = [];
   
   Object.entries(updates).forEach(([key, value]) => {
-    if (key !== 'updated_at') {
+    if (key !== 'updated_at' && allowedFields.has(key)) {
       fields.push(`${key} = ?`);
       values.push(value);
     }
   });
+  
+  if (fields.length === 0) {
+    return; // No valid fields to update
+  }
   
   fields.push('updated_at = ?');
   values.push(now);
@@ -186,15 +197,15 @@ export async function updatePosition(symbol: string, updates: Partial<Omit<Posit
   executeInsert(query, values);
 }
 
-export async function deletePosition(symbol: string): Promise<void> {
+export function deletePosition(symbol: string): void {
   executeInsert('DELETE FROM positions WHERE symbol = ?', [symbol]);
 }
 
-export async function getAllPositions(): Promise<Position[]> {
+export function getAllPositions(): Position[] {
   return executeQuery<Position>('SELECT * FROM positions ORDER BY symbol');
 }
 
-export async function getPositionBySymbol(symbol: string): Promise<Position | null> {
+export function getPositionBySymbol(symbol: string): Position | null {
   const results = executeQuery<Position>(
     'SELECT * FROM positions WHERE symbol = ?',
     [symbol]
@@ -204,7 +215,7 @@ export async function getPositionBySymbol(symbol: string): Promise<Position | nu
 
 // ============= WATCHLIST =============
 
-export async function addToWatchlist(entry: Omit<WatchlistEntry, 'added_at'>): Promise<void> {
+export function addToWatchlist(entry: Omit<WatchlistEntry, 'added_at'>): void {
   const now = new Date().toISOString();
   const query = `
     INSERT INTO watchlist (symbol, added_at, thesis_tag, notes)
@@ -219,15 +230,15 @@ export async function addToWatchlist(entry: Omit<WatchlistEntry, 'added_at'>): P
   ]);
 }
 
-export async function deleteFromWatchlist(symbol: string): Promise<void> {
+export function deleteFromWatchlist(symbol: string): void {
   executeInsert('DELETE FROM watchlist WHERE symbol = ?', [symbol]);
 }
 
-export async function getAllWatchlist(): Promise<WatchlistEntry[]> {
+export function getAllWatchlist(): WatchlistEntry[] {
   return executeQuery<WatchlistEntry>('SELECT * FROM watchlist ORDER BY added_at DESC');
 }
 
-export async function getWatchlistBySymbol(symbol: string): Promise<WatchlistEntry | null> {
+export function getWatchlistBySymbol(symbol: string): WatchlistEntry | null {
   const results = executeQuery<WatchlistEntry>(
     'SELECT * FROM watchlist WHERE symbol = ?',
     [symbol]
@@ -237,7 +248,7 @@ export async function getWatchlistBySymbol(symbol: string): Promise<WatchlistEnt
 
 // ============= PRICES =============
 
-export async function addPrices(prices: Price[]): Promise<void> {
+export function addPrices(prices: Price[]): void {
   if (prices.length === 0) return;
   
   const db = getDatabase();
@@ -271,7 +282,7 @@ export async function addPrices(prices: Price[]): Promise<void> {
   }
 }
 
-export async function getPricesForSymbol(symbol: string, limit?: number): Promise<Price[]> {
+export function getPricesForSymbol(symbol: string, limit?: number): Price[] {
   const query = limit
     ? `SELECT * FROM prices WHERE symbol = ? ORDER BY date DESC LIMIT ?`
     : `SELECT * FROM prices WHERE symbol = ? ORDER BY date DESC`;
@@ -280,7 +291,7 @@ export async function getPricesForSymbol(symbol: string, limit?: number): Promis
   return executeQuery<Price>(query, params);
 }
 
-export async function getLatestPrice(symbol: string): Promise<Price | null> {
+export function getLatestPrice(symbol: string): Price | null {
   const results = executeQuery<Price>(
     'SELECT * FROM prices WHERE symbol = ? ORDER BY date DESC LIMIT 1',
     [symbol]
@@ -288,13 +299,13 @@ export async function getLatestPrice(symbol: string): Promise<Price | null> {
   return results.length > 0 ? results[0] : null;
 }
 
-export async function deletePricesForSymbol(symbol: string): Promise<void> {
+export function deletePricesForSymbol(symbol: string): void {
   executeInsert('DELETE FROM prices WHERE symbol = ?', [symbol]);
 }
 
 // ============= FUNDAMENTALS =============
 
-export async function upsertFundamentals(data: Fundamentals): Promise<void> {
+export function upsertFundamentals(data: Fundamentals): void {
   const query = `
     INSERT INTO fundamentals (
       symbol, fetched_at, market_cap, trailing_pe, forward_pe, price_to_sales,
@@ -334,7 +345,7 @@ export async function upsertFundamentals(data: Fundamentals): Promise<void> {
   ]);
 }
 
-export async function getFundamentals(symbol: string): Promise<Fundamentals | null> {
+export function getFundamentals(symbol: string): Fundamentals | null {
   const results = executeQuery<Fundamentals>(
     'SELECT * FROM fundamentals WHERE symbol = ?',
     [symbol]
@@ -342,13 +353,13 @@ export async function getFundamentals(symbol: string): Promise<Fundamentals | nu
   return results.length > 0 ? results[0] : null;
 }
 
-export async function deleteFundamentals(symbol: string): Promise<void> {
+export function deleteFundamentals(symbol: string): void {
   executeInsert('DELETE FROM fundamentals WHERE symbol = ?', [symbol]);
 }
 
 // ============= AI REVIEWS =============
 
-export async function addReview(review: Omit<AIReview, 'id'>): Promise<number> {
+export function addReview(review: Omit<AIReview, 'id'>): number {
   const query = `
     INSERT INTO ai_reviews (created_at, scope, symbol, input_json, output_md)
     VALUES (?, ?, ?, ?, ?)
@@ -372,7 +383,7 @@ export async function addReview(review: Omit<AIReview, 'id'>): Promise<number> {
   return result[0].id;
 }
 
-export async function getReviews(symbol?: string, limit?: number): Promise<AIReview[]> {
+export function getReviews(symbol?: string, limit?: number): AIReview[] {
   let query = 'SELECT * FROM ai_reviews';
   const params: any[] = [];
   
@@ -391,13 +402,13 @@ export async function getReviews(symbol?: string, limit?: number): Promise<AIRev
   return executeQuery<AIReview>(query, params);
 }
 
-export async function deleteReview(id: number): Promise<void> {
+export function deleteReview(id: number): void {
   executeInsert('DELETE FROM ai_reviews WHERE id = ?', [id]);
 }
 
 // ============= JOURNAL ENTRIES =============
 
-export async function addJournalEntry(entry: Omit<JournalEntry, 'id'>): Promise<number> {
+export function addJournalEntry(entry: Omit<JournalEntry, 'id'>): number {
   const query = `
     INSERT INTO journal_entries (
       created_at, type, symbol, entry_price, exit_price, qty, pnl,
@@ -430,7 +441,7 @@ export async function addJournalEntry(entry: Omit<JournalEntry, 'id'>): Promise<
   return result[0].id;
 }
 
-export async function getAllJournalEntries(limit?: number): Promise<JournalEntry[]> {
+export function getAllJournalEntries(limit?: number): JournalEntry[] {
   const query = limit
     ? 'SELECT * FROM journal_entries ORDER BY created_at DESC LIMIT ?'
     : 'SELECT * FROM journal_entries ORDER BY created_at DESC';
@@ -439,25 +450,37 @@ export async function getAllJournalEntries(limit?: number): Promise<JournalEntry
   return executeQuery<JournalEntry>(query, params);
 }
 
-export async function getJournalEntriesBySymbol(symbol: string): Promise<JournalEntry[]> {
+export function getJournalEntriesBySymbol(symbol: string): JournalEntry[] {
   return executeQuery<JournalEntry>(
     'SELECT * FROM journal_entries WHERE symbol = ? ORDER BY created_at DESC',
     [symbol]
   );
 }
 
-export async function deleteJournalEntry(id: number): Promise<void> {
+export function deleteJournalEntry(id: number): void {
   executeInsert('DELETE FROM journal_entries WHERE id = ?', [id]);
 }
 
-export async function updateJournalEntry(id: number, updates: Partial<Omit<JournalEntry, 'id'>>): Promise<void> {
+export function updateJournalEntry(id: number, updates: Partial<Omit<JournalEntry, 'id'>>): void {
+  // Validate field names against allowlist
+  const allowedFields = new Set([
+    'created_at', 'type', 'symbol', 'entry_price', 'exit_price',
+    'qty', 'pnl', 'thesis', 'invalidation', 'outcome', 'lesson'
+  ]);
+  
   const fields: string[] = [];
   const values: any[] = [];
   
   Object.entries(updates).forEach(([key, value]) => {
-    fields.push(`${key} = ?`);
-    values.push(value);
+    if (allowedFields.has(key)) {
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
   });
+  
+  if (fields.length === 0) {
+    return; // No valid fields to update
+  }
   
   values.push(id);
   
