@@ -68,7 +68,7 @@ const SYMBOL_DELAY_MS = 500; // Delay between processing different symbols
 
 // ============= RATE LIMITING =============
 
-const rateLimits: RateLimitTracker = {}
+const rateLimits: RateLimitTracker = {};
 
 /**
  * Check if we can make an API call within rate limits
