@@ -149,8 +149,30 @@ export default function Dashboard() {
     }
   };
 
-  const handleAIReview = () => {
-    alert('AI review feature coming soon!');
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewResult, setReviewResult] = useState<string | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+
+  const handleAIReview = async () => {
+    setReviewLoading(true);
+    setReviewError(null);
+    
+    try {
+      const { generatePortfolioReview } = await import('../lib/openaiService');
+      const result = await generatePortfolioReview();
+      setReviewResult(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to generate review';
+      setReviewError(message);
+      console.error('AI review failed:', err);
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const handleCloseReview = () => {
+    setReviewResult(null);
+    setReviewError(null);
   };
 
   return (
@@ -169,9 +191,10 @@ export default function Dashboard() {
             </button>
             <button 
               onClick={handleAIReview}
-              className="rounded-lg bg-cyan-500/20 px-3 py-2 text-xs text-cyan-200 hover:bg-cyan-500/30"
+              disabled={reviewLoading}
+              className="rounded-lg bg-cyan-500/20 px-3 py-2 text-xs text-cyan-200 hover:bg-cyan-500/30 disabled:opacity-50"
             >
-              Weekly AI review
+              {reviewLoading ? 'Generating...' : 'Weekly AI review'}
             </button>
           </div>
         }
@@ -235,6 +258,29 @@ export default function Dashboard() {
           <div className="mt-4 text-sm text-slate-400">No alerts. All positions look good.</div>
         )}
       </div>
+
+      {(reviewResult || reviewError) && (
+        <div className="card">
+          <div className="flex items-center justify-between">
+            <SectionHeader title="AI Portfolio Review" />
+            <button
+              onClick={handleCloseReview}
+              className="text-xs text-slate-400 hover:text-slate-200"
+            >
+              Close
+            </button>
+          </div>
+          {reviewError ? (
+            <div className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
+              {reviewError}
+            </div>
+          ) : (
+            <div className="mt-4 prose prose-invert prose-sm max-w-none">
+              <div className="whitespace-pre-wrap text-sm text-slate-300">{reviewResult}</div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
