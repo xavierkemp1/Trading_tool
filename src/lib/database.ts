@@ -16,11 +16,15 @@ export async function initDatabase(): Promise<Database> {
   }
 
   try {
+    console.log('Initializing database...');
+    
     // Initialize SQL.js
     if (!sqlJs) {
+      console.log('Loading SQL.js library...');
       sqlJs = await initSqlJs({
         locateFile: (file: string) => `/${file}`
       });
+      console.log('SQL.js loaded successfully');
     }
 
     // Try to load existing database from localStorage
@@ -28,11 +32,13 @@ export async function initDatabase(): Promise<Database> {
     
     if (savedDb) {
       // Load existing database
+      console.log('Loading existing database from localStorage...');
       const data = Uint8Array.from(atob(savedDb), c => c.charCodeAt(0));
       dbInstance = new sqlJs.Database(data);
       console.log('Database loaded from localStorage');
     } else {
       // Create new database
+      console.log('Creating new database...');
       dbInstance = new sqlJs.Database();
       
       // Load and execute schema
@@ -49,10 +55,12 @@ export async function initDatabase(): Promise<Database> {
       throw new Error('Failed to create database instance');
     }
 
+    console.log('Database initialization complete');
     return dbInstance;
   } catch (error) {
     console.error('Failed to initialize database:', error);
-    throw new Error('Database initialization failed');
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Database initialization failed: ${errorMessage}`);
   }
 }
 
@@ -61,13 +69,28 @@ export async function initDatabase(): Promise<Database> {
  */
 async function loadSchema(db: Database): Promise<void> {
   try {
+    // Validate that schemaSQL is a valid SQL string
+    if (typeof schemaSQL !== 'string' || schemaSQL.trim().length === 0) {
+      throw new Error(`Invalid schema SQL: expected non-empty string, got ${typeof schemaSQL}`);
+    }
+    
+    // Check if schemaSQL looks like a file path (common import issue)
+    if (schemaSQL.includes('.sql') && schemaSQL.length < 100) {
+      throw new Error(`Schema SQL appears to be a file path (${schemaSQL}) instead of SQL content. Check Vite configuration for SQL file loading.`);
+    }
+    
+    console.log('Executing schema SQL...');
     db.exec(schemaSQL);
+    console.log('Schema loaded successfully');
     
     // Store version info
     db.exec(`CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value TEXT)`);
     db.exec(`INSERT OR REPLACE INTO _meta (key, value) VALUES ('version', '${DB_VERSION}')`);
   } catch (error) {
     console.error('Failed to load schema:', error);
+    if (error instanceof Error) {
+      throw new Error(`Schema loading failed: ${error.message}`);
+    }
     throw error;
   }
 }
