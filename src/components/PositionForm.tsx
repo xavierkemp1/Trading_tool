@@ -1,5 +1,5 @@
-import { useState, FormEvent } from 'react';
-import { addPosition, updatePosition, type Position } from '../lib/db';
+import { useState, FormEvent, useEffect, useRef } from 'react';
+import { addPosition, updatePosition, getAllPositions, getAllWatchlist, type Position } from '../lib/db';
 import { fetchCurrentPrice } from '../lib/dataService';
 import type { ThesisTag, TimeHorizon } from '../lib/types';
 
@@ -28,6 +28,107 @@ export default function PositionForm({ position, onSave, onCancel }: PositionFor
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validatingSymbol, setValidatingSymbol] = useState(false);
+  
+  // Autocomplete state
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  // Get all previously used symbols
+  const getPreviousSymbols = (): string[] => {
+    const symbols = new Set<string>();
+    
+    // Get symbols from positions
+    const positions = getAllPositions();
+    positions.forEach(p => symbols.add(p.symbol));
+    
+    // Get symbols from watchlist
+    const watchlist = getAllWatchlist();
+    watchlist.forEach(w => symbols.add(w.symbol));
+    
+    return Array.from(symbols).sort();
+  };
+
+  // Update suggestions based on input
+  const updateSuggestions = (value: string) => {
+    if (!value || position) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const upperValue = value.toUpperCase();
+    const previousSymbols = getPreviousSymbols();
+    const filtered = previousSymbols.filter(symbol => 
+      symbol.startsWith(upperValue)
+    );
+    
+    setSuggestions(filtered);
+    setShowSuggestions(filtered.length > 0);
+    setSelectedSuggestionIndex(-1);
+  };
+
+  // Handle symbol input change
+  const handleSymbolChange = (value: string) => {
+    const upperValue = value.toUpperCase();
+    setFormData({ ...formData, symbol: upperValue });
+    updateSuggestions(upperValue);
+  };
+
+  // Handle suggestion selection
+  const selectSuggestion = (symbol: string) => {
+    setFormData({ ...formData, symbol });
+    setShowSuggestions(false);
+    setSuggestions([]);
+    setSelectedSuggestionIndex(-1);
+  };
+
+  // Handle keyboard navigation
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions || suggestions.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => 
+          prev < suggestions.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
+        break;
+      case 'Enter':
+        if (selectedSuggestionIndex >= 0) {
+          e.preventDefault();
+          selectSuggestion(suggestions[selectedSuggestionIndex]);
+        }
+        break;
+      case 'Escape':
+        setShowSuggestions(false);
+        setSelectedSuggestionIndex(-1);
+        break;
+    }
+  };
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        suggestionsRef.current &&
+        !suggestionsRef.current.contains(event.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(event.target as Node)
+      ) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const validateSymbol = async (symbol: string) => {
     if (!symbol || position) return true; // Skip validation for edit mode
@@ -39,7 +140,14 @@ export default function PositionForm({ position, onSave, onCancel }: PositionFor
       await fetchCurrentPrice(symbol);
       return true;
     } catch (err) {
-      setError(`Invalid symbol: ${symbol}`);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      
+      // Provide clearer error messages
+      if (errorMessage.includes('Failed to fetch current price')) {
+        setError(`Unable to validate symbol "${symbol}". This could be due to:\n• Invalid or unknown ticker symbol\n• API service temporarily unavailable\n• Network connectivity issues\n\nPlease verify the symbol is correct and try again.`);
+      } else {
+        setError(`Error validating symbol: ${errorMessage}`);
+      }
       return false;
     } finally {
       setValidatingSymbol(false);
@@ -110,15 +218,41 @@ export default function PositionForm({ position, onSave, onCancel }: PositionFor
             <div className="space-y-4">
               <div>
                 <label className="block text-xs uppercase text-slate-400">Symbol *</label>
-                <input
-                  type="text"
-                  value={formData.symbol}
-                  onChange={(e) => setFormData({ ...formData, symbol: e.target.value.toUpperCase() })}
-                  disabled={!!position}
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none disabled:opacity-50"
-                  placeholder="AAPL"
-                  required
-                />
+                <div className="relative">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={formData.symbol}
+                    onChange={(e) => handleSymbolChange(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onFocus={() => updateSuggestions(formData.symbol)}
+                    disabled={!!position}
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none disabled:opacity-50"
+                    placeholder="AAPL"
+                    required
+                    autoComplete="off"
+                  />
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div
+                      ref={suggestionsRef}
+                      className="absolute z-10 mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 shadow-lg max-h-48 overflow-y-auto"
+                    >
+                      {suggestions.map((symbol, index) => (
+                        <div
+                          key={symbol}
+                          onClick={() => selectSuggestion(symbol)}
+                          className={`px-3 py-2 text-sm cursor-pointer ${
+                            index === selectedSuggestionIndex
+                              ? 'bg-cyan-500/20 text-cyan-100'
+                              : 'text-slate-100 hover:bg-slate-700'
+                          }`}
+                        >
+                          {symbol}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               
               <div className="grid gap-4 sm:grid-cols-2">

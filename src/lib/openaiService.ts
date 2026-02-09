@@ -268,3 +268,101 @@ export async function generatePortfolioReview(): Promise<string> {
   
   return outputMd;
 }
+
+/**
+ * Analyze uploaded file content using AI
+ */
+export async function analyzeFileContent(
+  fileContent: string,
+  fileName: string,
+  fileType: string,
+  symbol?: string
+): Promise<string> {
+  const settings = getSettings();
+  
+  if (!settings.openai.enabled) {
+    throw new Error('OpenAI integration is disabled in settings');
+  }
+  
+  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OpenAI API key not configured. Set VITE_OPENAI_API_KEY in your environment.');
+  }
+
+  const systemPrompt = `You are a financial analyst AI assistant specialized in analyzing stock-related documents and materials.
+Your task is to:
+1. Analyze the provided content thoroughly
+2. Extract key insights, metrics, and data points relevant to investment decisions
+3. Identify sentiment (bullish, bearish, or neutral)
+4. Highlight risks and opportunities
+5. Provide actionable conclusions
+
+Be concise but comprehensive. Structure your response with clear sections.`;
+
+  const userPrompt = `Please analyze this ${fileType} file "${fileName}"${symbol ? ` related to ${symbol}` : ''}:
+
+${fileContent}
+
+Provide a detailed analysis including:
+- Key findings and insights
+- Investment sentiment (bullish/bearish/neutral)
+- Important metrics or data points
+- Risks identified
+- Opportunities identified
+- Your conclusion and recommendation`;
+
+  // Call OpenAI API
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: settings.openai.model,
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt
+        },
+        {
+          role: 'user',
+          content: userPrompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 2000
+    })
+  });
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+    throw new Error(`OpenAI API error: ${error.error?.message || response.statusText}`);
+  }
+  
+  const result = await response.json();
+  const outputMd = result.choices?.[0]?.message?.content || '';
+  
+  if (!outputMd) {
+    throw new Error('Empty response from OpenAI API');
+  }
+
+  // Store in database
+  const inputJson = JSON.stringify({
+    fileName,
+    fileType,
+    symbol,
+    contentLength: fileContent.length,
+    timestamp: new Date().toISOString()
+  }, null, 2);
+
+  addReview({
+    created_at: new Date().toISOString(),
+    scope: 'file_analysis',
+    symbol: symbol,
+    input_json: inputJson,
+    output_md: outputMd
+  });
+  
+  return outputMd;
+}
