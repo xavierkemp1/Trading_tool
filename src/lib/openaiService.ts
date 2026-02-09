@@ -359,7 +359,7 @@ Provide a detailed analysis including:
   addReview({
     created_at: new Date().toISOString(),
     scope: 'file_analysis',
-    symbol: symbol,
+    symbol,
     input_json: inputJson,
     output_md: outputMd
   });

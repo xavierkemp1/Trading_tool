@@ -144,7 +144,7 @@ export default function PositionForm({ position, onSave, onCancel }: PositionFor
       
       // Provide clearer error messages
       if (errorMessage.includes('Failed to fetch current price')) {
-        setError(`Unable to validate symbol "${symbol}". This could be due to:\n• Invalid or unknown ticker symbol\n• API service temporarily unavailable\n• Network connectivity issues\n\nPlease verify the symbol is correct and try again.`);
+        setError(`Unable to validate symbol "${symbol}". This could be due to: Invalid or unknown ticker symbol, API service temporarily unavailable, or network connectivity issues. Please verify the symbol is correct and try again.`);
       } else {
         setError(`Error validating symbol: ${errorMessage}`);
       }

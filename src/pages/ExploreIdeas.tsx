@@ -131,7 +131,7 @@ export default function ExploreIdeas() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      setUploadedFiles(Array.from(files));
+      setUploadedFiles([files[0]]); // Only take first file
       setFileAnalysisResult(null);
       setFileAnalysisError(null);
     }
@@ -143,7 +143,7 @@ export default function ExploreIdeas() {
 
   const handleAnalyzeFiles = async () => {
     if (uploadedFiles.length === 0) {
-      setFileAnalysisError('Please upload at least one file');
+      setFileAnalysisError('Please upload a file');
       return;
     }
 
@@ -152,7 +152,7 @@ export default function ExploreIdeas() {
     setFileAnalysisResult(null);
 
     try {
-      const file = uploadedFiles[0]; // Analyze first file for now
+      const file = uploadedFiles[0];
       const text = await readFileAsText(file);
       
       const result = await analyzeFileContent(
@@ -365,7 +365,6 @@ export default function ExploreIdeas() {
                 type="file"
                 onChange={handleFileUpload}
                 accept=".txt,.pdf,.doc,.docx,.csv"
-                multiple
                 className="hidden"
                 id="file-upload"
               />
