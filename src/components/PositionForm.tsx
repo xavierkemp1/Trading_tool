@@ -103,118 +103,140 @@ export default function PositionForm({ position, onSave, onCancel }: PositionFor
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="block text-xs uppercase text-slate-400">Symbol *</label>
-              <input
-                type="text"
-                value={formData.symbol}
-                onChange={(e) => setFormData({ ...formData, symbol: e.target.value.toUpperCase() })}
-                disabled={!!position}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none disabled:opacity-50"
-                placeholder="AAPL"
-                required
-              />
-            </div>
+        <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+          {/* Basic Information Section */}
+          <div>
+            <h3 className="mb-3 text-sm font-medium text-slate-300">Basic Information</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs uppercase text-slate-400">Symbol *</label>
+                <input
+                  type="text"
+                  value={formData.symbol}
+                  onChange={(e) => setFormData({ ...formData, symbol: e.target.value.toUpperCase() })}
+                  disabled={!!position}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none disabled:opacity-50"
+                  placeholder="AAPL"
+                  required
+                />
+              </div>
+              
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs uppercase text-slate-400">Quantity *</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={formData.qty || ''}
+                    onChange={(e) => setFormData({ ...formData, qty: parseFloat(e.target.value) || 0 })}
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                    placeholder="100"
+                    required
+                  />
+                </div>
 
-            <div>
-              <label className="block text-xs uppercase text-slate-400">Currency</label>
-              <input
-                type="text"
-                value={formData.currency}
-                onChange={(e) => setFormData({ ...formData, currency: e.target.value.toUpperCase() })}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
-                placeholder="USD"
-              />
-            </div>
+                <div>
+                  <label className="block text-xs uppercase text-slate-400">Average Cost *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.avgCost || ''}
+                    onChange={(e) => setFormData({ ...formData, avgCost: parseFloat(e.target.value) || 0 })}
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                    placeholder="150.00"
+                    required
+                  />
+                </div>
+              </div>
 
-            <div>
-              <label className="block text-xs uppercase text-slate-400">Quantity *</label>
-              <input
-                type="number"
-                step="any"
-                value={formData.qty || ''}
-                onChange={(e) => setFormData({ ...formData, qty: parseFloat(e.target.value) || 0 })}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
-                placeholder="100"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs uppercase text-slate-400">Average Cost *</label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData.avgCost || ''}
-                onChange={(e) => setFormData({ ...formData, avgCost: parseFloat(e.target.value) || 0 })}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
-                placeholder="150.00"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs uppercase text-slate-400">Thesis Tag</label>
-              <select
-                value={formData.thesisTag}
-                onChange={(e) => setFormData({ ...formData, thesisTag: e.target.value as ThesisTag })}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
-              >
-                {thesisTags.map(tag => (
-                  <option key={tag} value={tag}>{tag}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs uppercase text-slate-400">Time Horizon</label>
-              <select
-                value={formData.timeHorizon}
-                onChange={(e) => setFormData({ ...formData, timeHorizon: e.target.value as TimeHorizon })}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
-              >
-                {timeHorizons.map(horizon => (
-                  <option key={horizon} value={horizon}>{horizon}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs uppercase text-slate-400">Invalidation Price</label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData.invalidation || ''}
-                onChange={(e) => setFormData({ ...formData, invalidation: e.target.value ? parseFloat(e.target.value) : undefined })}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
-                placeholder="100.00"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs uppercase text-slate-400">Target Price</label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData.target || ''}
-                onChange={(e) => setFormData({ ...formData, target: e.target.value ? parseFloat(e.target.value) : undefined })}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
-                placeholder="200.00"
-              />
+              <div>
+                <label className="block text-xs uppercase text-slate-400">Currency</label>
+                <input
+                  type="text"
+                  value={formData.currency}
+                  onChange={(e) => setFormData({ ...formData, currency: e.target.value.toUpperCase() })}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                  placeholder="USD"
+                />
+              </div>
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs uppercase text-slate-400">Thesis</label>
-            <textarea
-              value={formData.thesis}
-              onChange={(e) => setFormData({ ...formData, thesis: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
-              rows={3}
-              placeholder="Why are you holding this position?"
-            />
+          {/* Investment Strategy Section */}
+          <div className="mt-8">
+            <h3 className="mb-3 text-sm font-medium text-slate-300">Investment Strategy</h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs uppercase text-slate-400">Thesis Tag</label>
+                <select
+                  value={formData.thesisTag}
+                  onChange={(e) => setFormData({ ...formData, thesisTag: e.target.value as ThesisTag })}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
+                >
+                  {thesisTags.map(tag => (
+                    <option key={tag} value={tag}>{tag}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase text-slate-400">Time Horizon</label>
+                <select
+                  value={formData.timeHorizon}
+                  onChange={(e) => setFormData({ ...formData, timeHorizon: e.target.value as TimeHorizon })}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
+                >
+                  {timeHorizons.map(horizon => (
+                    <option key={horizon} value={horizon}>{horizon}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Price Targets Section */}
+          <div className="mt-8">
+            <h3 className="mb-3 text-sm font-medium text-slate-300">Price Targets</h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs uppercase text-slate-400">Invalidation Price</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.invalidation || ''}
+                  onChange={(e) => setFormData({ ...formData, invalidation: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                  placeholder="100.00"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase text-slate-400">Target Price</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.target || ''}
+                  onChange={(e) => setFormData({ ...formData, target: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                  placeholder="200.00"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Notes Section */}
+          <div className="mt-8">
+            <h3 className="mb-3 text-sm font-medium text-slate-300">Notes</h3>
+            <div>
+              <label className="block text-xs uppercase text-slate-400">Thesis</label>
+              <textarea
+                value={formData.thesis}
+                onChange={(e) => setFormData({ ...formData, thesis: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                rows={5}
+                placeholder="Why are you holding this position?"
+              />
+            </div>
           </div>
 
           <div className="flex gap-3 pt-4">
