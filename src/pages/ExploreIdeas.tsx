@@ -1,5 +1,11 @@
+import { useState, useEffect, useCallback } from 'react';
 import SectionHeader from '../components/SectionHeader';
-import { watchlist } from '../data/mock';
+import WatchlistManager from '../components/WatchlistManager';
+import { getAllWatchlist, getLatestPrice, getSymbol } from '../lib/db';
+import { calculateIndicators } from '../lib/dataService';
+import { fetchRedditSentiment, type RedditSentiment } from '../lib/redditService';
+import { isRedditEnabled } from '../lib/settingsService';
+import type { WatchlistItem } from '../lib/types';
 
 const quantFilters = [
   { label: 'Above SMA200', value: 'On' },
@@ -8,34 +14,159 @@ const quantFilters = [
   { label: 'Rising volume', value: '2 of last 3 weeks' }
 ];
 
-const narrativeClusters = [
-  {
-    symbol: 'NVDA',
-    mentions: 82,
-    change: '+14%',
-    sentiment: 'Mixed',
-    themes: ['Supply chain', 'Enterprise AI', 'Margins']
-  },
-  {
-    symbol: 'SMCI',
-    mentions: 48,
-    change: '+7%',
-    sentiment: 'Positive',
-    themes: ['Data center demand', 'Short squeeze', 'Guidance']
-  },
-  {
-    symbol: 'TSLA',
-    mentions: 55,
-    change: '-9%',
-    sentiment: 'Negative',
-    themes: ['Deliveries', 'Pricing', 'China mix']
-  }
-];
-
 export default function ExploreIdeas() {
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [redditSentiment, setRedditSentiment] = useState<RedditSentiment[]>([]);
+  const [redditLoading, setRedditLoading] = useState(false);
+  const [redditError, setRedditError] = useState<string | null>(null);
+  const [selectedIdea, setSelectedIdea] = useState<string | null>(null);
+  const [ideaReviewLoading, setIdeaReviewLoading] = useState(false);
+  const [ideaReviewResult, setIdeaReviewResult] = useState<string | null>(null);
+  const [ideaReviewError, setIdeaReviewError] = useState<string | null>(null);
+
+  const loadWatchlist = useCallback(async () => {
+    setLoading(true);
+    try {
+      const dbWatchlist = getAllWatchlist();
+      const items: WatchlistItem[] = [];
+      
+      for (const entry of dbWatchlist) {
+        const latestPrice = getLatestPrice(entry.symbol);
+        const symbolInfo = getSymbol(entry.symbol);
+        
+        if (!latestPrice) {
+          console.warn(`No price data for ${entry.symbol}`);
+          continue;
+        }
+        
+        let indicators;
+        try {
+          indicators = await calculateIndicators(entry.symbol);
+        } catch (err) {
+          console.warn(`Failed to calculate indicators for ${entry.symbol}:`, err);
+          continue;
+        }
+        
+        const aboveSma200 = indicators.sma200 ? latestPrice.close > indicators.sma200 : false;
+        const atrPct = indicators.atr14 ? (indicators.atr14 / latestPrice.close) * 100 : 0;
+        
+        items.push({
+          symbol: entry.symbol,
+          name: symbolInfo?.name || entry.symbol,
+          thesisTag: entry.thesis_tag || 'Other',
+          timeHorizon: 'Months', // Default
+          notes: entry.notes || '',
+          last: latestPrice.close,
+          aboveSma200,
+          atrPct
+        });
+      }
+      
+      setWatchlist(items);
+    } catch (err) {
+      console.error('Failed to load watchlist:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadWatchlist();
+    loadRedditSentiment();
+  }, [loadWatchlist]);
+
+  const loadRedditSentiment = async () => {
+    if (!isRedditEnabled()) {
+      return;
+    }
+
+    setRedditLoading(true);
+    setRedditError(null);
+
+    try {
+      // Get popular symbols from watchlist or use defaults
+      const symbols = watchlist.length > 0 
+        ? watchlist.slice(0, 10).map(w => w.symbol)
+        : ['NVDA', 'AVGO', 'RTX', 'TSLA', 'AAPL', 'MSFT', 'GOOGL'];
+
+      const sentiment = await fetchRedditSentiment(symbols);
+      setRedditSentiment(sentiment.filter(s => s.mentions > 0));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load Reddit sentiment';
+      setRedditError(message);
+      console.error('Reddit sentiment fetch failed:', err);
+    } finally {
+      setRedditLoading(false);
+    }
+  };
+
+  const handleIdeaReview = async (symbol: string) => {
+    setIdeaReviewLoading(true);
+    setIdeaReviewError(null);
+    setIdeaReviewResult(null);
+    setSelectedIdea(symbol);
+
+    try {
+      const { generatePositionReview } = await import('../lib/openaiService');
+      const result = await generatePositionReview(symbol);
+      setIdeaReviewResult(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to generate review';
+      setIdeaReviewError(message);
+      console.error('AI review failed:', err);
+    } finally {
+      setIdeaReviewLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader title="Explore / New Ideas" subtitle="Shortlist only. Cap candidates to 50." />
+
+      <WatchlistManager onUpdate={loadWatchlist} />
+
+      <div className="card">
+        <SectionHeader title="Watchlist" subtitle="Your tracked ideas" />
+        {loading ? (
+          <div className="mt-4 text-sm text-slate-400">Loading watchlist...</div>
+        ) : watchlist.length === 0 ? (
+          <div className="mt-4 text-sm text-slate-400">No watchlist items yet. Add symbols above to track them.</div>
+        ) : (
+          <div className="mt-4">
+            <table className="table-grid">
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Name</th>
+                  <th>Last</th>
+                  <th>ATR%</th>
+                  <th>SMA200</th>
+                  <th>Thesis</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {watchlist.map((item) => (
+                  <tr key={item.symbol}>
+                    <td className="font-semibold text-slate-100">{item.symbol}</td>
+                    <td>{item.name}</td>
+                    <td>${item.last.toFixed(2)}</td>
+                    <td>{item.atrPct.toFixed(1)}%</td>
+                    <td>{item.aboveSma200 ? 'Above' : 'Below'}</td>
+                    <td>
+                      <span className="rounded-full border border-slate-700 px-2 py-0.5 text-xs text-slate-300">
+                        {item.thesisTag}
+                      </span>
+                    </td>
+                    <td className="text-xs text-slate-400">{item.notes || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <div className="card">
         <SectionHeader title="Quant screen" subtitle="Objective filters" />
@@ -46,72 +177,102 @@ export default function ExploreIdeas() {
             </div>
           ))}
         </div>
-        <div className="mt-4">
-          <table className="table-grid">
-            <thead>
-              <tr>
-                <th>Symbol</th>
-                <th>Name</th>
-                <th>Last</th>
-                <th>ATR%</th>
-                <th>SMA200</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {watchlist.map((item) => (
-                <tr key={item.symbol}>
-                  <td className="font-semibold text-slate-100">{item.symbol}</td>
-                  <td>{item.name}</td>
-                  <td>${item.last.toFixed(2)}</td>
-                  <td>{item.atrPct.toFixed(1)}%</td>
-                  <td>{item.aboveSma200 ? 'Above' : 'Below'}</td>
-                  <td>
-                    <button className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800">
-                      Add to watchlist
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mt-4 text-sm text-slate-400">
+          Quant screening feature coming soon. Use the watchlist manager above to track specific symbols.
         </div>
       </div>
 
       <div className="card">
-        <SectionHeader title="Narrative signals" subtitle="Optional Reddit clustering (cached)" />
-        <div className="mt-4 grid gap-3">
-          {narrativeClusters.map((cluster) => (
-            <div
-              key={cluster.symbol}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/60 p-3"
+        <div className="flex items-center justify-between">
+          <SectionHeader title="Narrative signals" subtitle="Optional Reddit clustering (cached)" />
+          {isRedditEnabled() && (
+            <button
+              onClick={loadRedditSentiment}
+              disabled={redditLoading}
+              className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800 disabled:opacity-50"
             >
-              <div>
-                <p className="text-sm font-semibold text-slate-100">{cluster.symbol}</p>
-                <p className="text-xs text-slate-400">
-                  Mentions {cluster.mentions} ({cluster.change}) · Sentiment {cluster.sentiment}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {cluster.themes.map((theme) => (
-                  <span key={theme} className="rounded-full border border-slate-800 px-2 py-1 text-xs text-slate-300">
-                    {theme}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
+              {redditLoading ? 'Loading...' : 'Refresh'}
+            </button>
+          )}
         </div>
+        
+        {!isRedditEnabled() ? (
+          <div className="mt-4 text-sm text-slate-400">
+            Reddit sentiment is disabled. Enable it in settings to see narrative signals.
+          </div>
+        ) : redditError ? (
+          <div className="mt-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-200">
+            {redditError}
+          </div>
+        ) : redditLoading ? (
+          <div className="mt-4 text-sm text-slate-400">Loading Reddit sentiment...</div>
+        ) : redditSentiment.length === 0 ? (
+          <div className="mt-4 text-sm text-slate-400">No mentions found in recent posts.</div>
+        ) : (
+          <div className="mt-4 grid gap-3">
+            {redditSentiment.map((cluster) => (
+              <div
+                key={cluster.symbol}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/60 p-3 cursor-pointer hover:bg-slate-800/50"
+                onClick={() => handleIdeaReview(cluster.symbol)}
+              >
+                <div>
+                  <p className="text-sm font-semibold text-slate-100">{cluster.symbol}</p>
+                  <p className="text-xs text-slate-400">
+                    Mentions {cluster.mentions} ({cluster.change}) · Sentiment {cluster.sentiment}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {cluster.themes.map((theme) => (
+                    <span key={theme} className="rounded-full border border-slate-800 px-2 py-1 text-xs text-slate-300">
+                      {theme}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="card">
         <SectionHeader title="Idea detail" subtitle="Select a candidate to review" />
         <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-400">
           <p>Chart placeholder (price + SMA50/200). Fundamentals and AI idea review appear here.</p>
+          {selectedIdea && (
+            <p className="mt-2 text-slate-200">Selected: {selectedIdea}</p>
+          )}
         </div>
-        <button className="mt-4 w-full rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-100 hover:bg-slate-700">
-          AI idea review
+        <button 
+          onClick={() => selectedIdea && handleIdeaReview(selectedIdea)}
+          disabled={!selectedIdea || ideaReviewLoading}
+          className="mt-4 w-full rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:opacity-50"
+        >
+          {ideaReviewLoading ? 'Generating...' : 'AI idea review'}
         </button>
+        
+        {ideaReviewError && (
+          <div className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+            {ideaReviewError}
+          </div>
+        )}
+        
+        {ideaReviewResult && (
+          <div className="mt-3 rounded-lg border border-slate-800 bg-slate-900/60 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase text-slate-400">AI Review</p>
+              <button
+                onClick={() => setIdeaReviewResult(null)}
+                className="text-xs text-slate-400 hover:text-slate-200"
+              >
+                Close
+              </button>
+            </div>
+            <div className="prose prose-invert prose-sm max-w-none">
+              <div className="whitespace-pre-wrap text-sm text-slate-300">{ideaReviewResult}</div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

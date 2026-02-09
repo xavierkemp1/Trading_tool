@@ -5,6 +5,7 @@ import CurrentInvestments from './pages/CurrentInvestments';
 import ExploreIdeas from './pages/ExploreIdeas';
 import PortfolioRisk from './pages/PortfolioRisk';
 import JournalReview from './pages/JournalReview';
+import { AppProvider, useApp } from './lib/AppContext';
 
 const pages = {
   Dashboard: Dashboard,
@@ -16,9 +17,25 @@ const pages = {
 
 type PageKey = keyof typeof pages;
 
-export default function App() {
+function AppContent() {
   const [activePage, setActivePage] = useState<PageKey>('Dashboard');
+  const { dbInitialized, loading, lastRefresh, error } = useApp();
   const ActiveComponent = pages[activePage];
+
+  if (!dbInitialized) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-950">
+        <div className="text-center">
+          <div className="mb-4 text-lg text-slate-100">Initializing database...</div>
+          {error && (
+            <div className="mt-4 rounded-lg border border-rose-500/50 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+              {error}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-100">
@@ -30,11 +47,22 @@ export default function App() {
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Manual trading cockpit</p>
               <h1 className="text-2xl font-semibold text-slate-100">{activePage}</h1>
             </div>
-            <div className="text-xs text-slate-400">Local data · Last refresh 08:32</div>
+            <div className="text-xs text-slate-400">
+              Local data · Last refresh {lastRefresh || '—'}
+              {loading && <span className="ml-2 text-cyan-400">Updating...</span>}
+            </div>
           </div>
           <ActiveComponent />
         </div>
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AppProvider>
+      <AppContent />
+    </AppProvider>
   );
 }

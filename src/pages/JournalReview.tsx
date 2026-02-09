@@ -1,7 +1,15 @@
+import { useEffect, useState } from 'react';
 import SectionHeader from '../components/SectionHeader';
-import { journalEntries } from '../data/mock';
+import { getAllJournalEntries, type JournalEntry } from '../lib/db';
 
 export default function JournalReview() {
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+
+  useEffect(() => {
+    const entries = getAllJournalEntries();
+    setJournalEntries(entries);
+  }, []);
+
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
@@ -17,11 +25,14 @@ export default function JournalReview() {
       <div className="card">
         <SectionHeader title="Journal entries" subtitle="Filter by symbol, date range, or type" />
         <div className="mt-4 space-y-3">
-          {journalEntries.map((entry) => (
+          {journalEntries.length === 0 ? (
+            <p className="text-sm text-slate-400">No journal entries yet. Click "New entry" to add one.</p>
+          ) : (
+            journalEntries.map((entry) => (
             <div key={entry.id} className="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs uppercase text-slate-400">
-                  {entry.type} · {entry.createdAt}
+                  {entry.type} · {entry.created_at}
                 </span>
                 {entry.symbol ? <span className="text-xs text-slate-300">{entry.symbol}</span> : null}
               </div>
@@ -29,7 +40,8 @@ export default function JournalReview() {
               {entry.outcome ? <p className="text-xs text-slate-400">Outcome: {entry.outcome}</p> : null}
               <p className="mt-2 text-xs text-slate-400">Lesson: {entry.lesson}</p>
             </div>
-          ))}
+          ))
+          )}
         </div>
       </div>
 
