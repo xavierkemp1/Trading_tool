@@ -1,34 +1,141 @@
-# Dependencies
-node_modules/
-package-lock.json
+############################
+# OS / Editor
+############################
+.DS_Store
+.DS_Store?
+Thumbs.db
+desktop.ini
 
-# Build output
-dist/
-
-# Environment variables
-.env
-.env.local
-.env.*.local
-
-# IDE
-.vscode/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
 .idea/
 *.swp
 *.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-logs/
 *.log
+
+############################
+# Node / Frontend
+############################
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+dist/
+build/
+out/
+coverage/
+.eslintcache
 
-# Temporary files
-.tmp/
+############################
+# Vite / React
+############################
+.vite/
+*.tsbuildinfo
+
+############################
+# Tauri
+############################
+src-tauri/target/
+src-tauri/gen/
+src-tauri/.cargo/
+src-tauri/Cargo.lock
+src-tauri/tauri.conf.json.bak
+
+############################
+# Rust
+############################
+target/
+**/*.rs.bk
+
+############################
+# SQLite / Local Databases
+############################
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+############################
+# Python (yfinance / data service)
+############################
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+venv/
+.venv/
+ENV/
+env/
+pip-wheel-metadata/
+pip-log.txt
+.pytest_cache/
+.mypy_cache/
+
+############################
+# Streamlit (if used locally)
+############################
+.streamlit/
+streamlit.log
+
+############################
+# Environment / Secrets
+############################
+.env
+.env.*
+!.env.example
+.env.local
+.env.development
+.env.production
+*.key
+*.pem
+*.crt
+
+############################
+# OpenAI / API Credentials
+############################
+openai_config.json
+secrets.json
+api_keys.json
+
+############################
+# Data / Caches
+############################
+data/
+cache/
+.cache/
 tmp/
-*.tmp
+temp/
+logs/
+
+############################
+# Generated Reports / AI Outputs
+############################
+ai_outputs/
+reports/
+exports/
+
+############################
+# Backup / Scratch
+############################
+backup/
+backups/
+scratch/
+notes/
+*.bak
+*.old
+
+############################
+# Misc
+############################
+*.pid
+*.seed
+*.tgz
+*.zip
+*.tar.gz
