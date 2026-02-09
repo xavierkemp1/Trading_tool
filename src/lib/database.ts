@@ -3,6 +3,7 @@ import schemaSQL from './db/migrations/001_init.sql';
 
 const DB_KEY = 'trading_app_db';
 const DB_VERSION = 1;
+const MAX_FILE_PATH_LENGTH = 100; // Max length to distinguish file paths from SQL content
 
 let dbInstance: Database | null = null;
 let sqlJs: SqlJsStatic | null = null;
@@ -75,7 +76,7 @@ async function loadSchema(db: Database): Promise<void> {
     }
     
     // Check if schemaSQL looks like a file path (common import issue)
-    if (schemaSQL.includes('.sql') && schemaSQL.length < 100) {
+    if (schemaSQL.includes('.sql') && schemaSQL.length < MAX_FILE_PATH_LENGTH) {
       throw new Error(`Schema SQL appears to be a file path (${schemaSQL}) instead of SQL content. Check Vite configuration for SQL file loading.`);
     }
     

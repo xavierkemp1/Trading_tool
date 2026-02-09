@@ -7,7 +7,7 @@ import path from 'path';
 function sqlPlugin() {
   return {
     name: 'vite-plugin-sql',
-    transform(code: string, id: string) {
+    transform(_code: string, id: string) {
       if (id.endsWith('.sql')) {
         const sql = fs.readFileSync(id, 'utf-8');
         return {
