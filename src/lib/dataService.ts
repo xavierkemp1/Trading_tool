@@ -108,13 +108,21 @@ function parseFloatSafe(value: any): number | undefined {
 // ============= YFINANCE API (Primary - Free, No API Key) =============
 
 /**
- * Fetch OHLCV data from Yahoo Finance
+ * Get the proxy URL from environment or default
+ */
+function getProxyUrl(): string {
+  return import.meta.env.VITE_PROXY_URL || 'http://localhost:3001';
+}
+
+/**
+ * Fetch OHLCV data from Yahoo Finance via proxy
  */
 async function fetchYFinanceChart(symbol: string): Promise<APIResponse> {
   try {
     const period1 = Math.floor(Date.now() / 1000) - (365 * 24 * 60 * 60); // 1 year ago
     const period2 = Math.floor(Date.now() / 1000);
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${period1}&period2=${period2}&interval=1d`;
+    const proxyUrl = getProxyUrl();
+    const url = `${proxyUrl}/api/chart/${symbol}?period1=${period1}&period2=${period2}&interval=1d`;
     
     const response = await fetch(url);
     if (!response.ok) {
@@ -166,11 +174,12 @@ async function fetchYFinanceChart(symbol: string): Promise<APIResponse> {
 }
 
 /**
- * Fetch current quote from Yahoo Finance
+ * Fetch current quote from Yahoo Finance via proxy
  */
 async function fetchYFinanceQuote(symbol: string): Promise<APIResponse> {
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
+    const proxyUrl = getProxyUrl();
+    const url = `${proxyUrl}/api/quote/${symbol}?interval=1d&range=1d`;
     
     const response = await fetch(url);
     if (!response.ok) {
