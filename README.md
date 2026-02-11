@@ -4,10 +4,63 @@ A minimalist, local-first trading decision cockpit focused on discipline, risk, 
 
 ## Quick start
 
+### Development Mode
+
+To avoid CORS issues when fetching data from Yahoo Finance, you need to run both the frontend and the backend proxy server.
+
+**Option 1: Run both together (recommended)**
 ```bash
 npm install
+npm run dev:all
+```
+
+**Option 2: Run separately**
+
+In terminal 1, start the backend proxy server:
+```bash
+npm run server
+```
+
+In terminal 2, start the frontend:
+```bash
 npm run dev
 ```
+
+### Production Build
+
+```bash
+npm run build
+```
+
+## Environment Setup
+
+Copy `.env.example` to `.env` and configure your API keys:
+
+```bash
+cp .env.example .env
+```
+
+The proxy server URL is configurable via `VITE_PROXY_URL` (defaults to `http://localhost:3001`).
+
+## Features
+
+### Backend Proxy Server
+- **Purpose**: Resolves CORS issues when fetching data from Yahoo Finance API
+- **Endpoints**:
+  - `/api/chart/:symbol` - Proxies Yahoo Finance chart data (OHLCV)
+  - `/api/quote/:symbol` - Proxies Yahoo Finance quote data
+  - `/health` - Health check endpoint
+- **Rate Limiting**: Built-in throttling (500ms minimum between requests) to prevent overwhelming Yahoo Finance
+- **Port**: Runs on port 3001 by default (configurable via `PORT` environment variable)
+
+### Industry Allocation Chart
+- **Location**: Dashboard page
+- **Purpose**: Visualizes portfolio breakdown by industry sector
+- **Features**:
+  - Interactive pie chart showing percentage allocation
+  - Displays dollar value and position count per industry
+  - Handles unknown/missing industry data gracefully
+  - Updates automatically when portfolio changes
 
 ## Local data
 
@@ -39,3 +92,5 @@ npm run dev
 - UI pages live in `src/pages`.
 - Rules engine in `src/lib/rules.ts`.
 - SQLite schema in `src/lib/db/migrations/001_init.sql`.
+- Backend proxy server in `server/index.js`.
+
