@@ -24,7 +24,7 @@ This document summarizes the implementation of real API integrations to replace 
 
 ### 2. Data Service Layer ✅
 - **File**: `src/lib/dataService.ts`
-  - Cascading API failover: yfinance → Alpha Vantage → Polygon.io
+  - Cascading API failover: yfinance → Alpha Vantage → Massive API
   - Smart caching (prices: 5 min, fundamentals: 1 week)
   - Rate limiting for each API
   - Functions:
@@ -114,9 +114,9 @@ This document summarizes the implementation of real API integrations to replace 
   - Fundamentals: `OVERVIEW`
   - Current price: `GLOBAL_QUOTE`
 
-### Tertiary: Polygon.io
+### Tertiary: Massive API
 - **Free tier**: 5 calls/minute
-- **API Key**: `VITE_POLYGON_API_KEY`
+- **API Key**: `VITE_MASSIVE_API_KEY`
 - **Endpoints**:
   - Aggregates: `/v2/aggs/ticker/{symbol}/range/1/day/{from}/{to}`
   - Ticker details: `/v3/reference/tickers/{symbol}`
@@ -137,7 +137,7 @@ cp .env.example .env
 Edit `.env` and add your API keys:
 ```
 VITE_ALPHA_VANTAGE_API_KEY=your_key_here
-VITE_POLYGON_API_KEY=your_key_here
+VITE_MASSIVE_API_KEY=your_key_here
 VITE_OPENAI_API_KEY=your_key_here  # Optional
 ```
 
@@ -199,7 +199,7 @@ The production build works correctly.
 ### Cascading API Failover
 - yfinance first (free, reliable)
 - Alpha Vantage backup (limited but stable)
-- Polygon.io last resort (good for edge cases)
+- Massive API last resort (good for edge cases)
 
 ### Caching Strategy
 - Prices: 5 minutes (balance freshness vs API limits)
