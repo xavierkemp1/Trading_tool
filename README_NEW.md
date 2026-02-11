@@ -43,8 +43,10 @@ VITE_OPENAI_API_KEY=your_openai_key
 
 **Getting API Keys:**
 - [Alpha Vantage](https://www.alphavantage.co/support/#api-key) - Free tier: 25 requests/day
-- [Polygon.io](https://polygon.io/) - Free tier: 5 calls/minute (Use this key for Massive API)
+- [Polygon.io](https://polygon.io/) - Free tier: 5 calls/minute (Used by Massive API)
 - [OpenAI](https://platform.openai.com/api-keys) - Pay per use
+
+**Note**: The Massive API uses Polygon.io infrastructure. Register at polygon.io to get your API key.
 
 ### 3. Build and Run
 ```bash
