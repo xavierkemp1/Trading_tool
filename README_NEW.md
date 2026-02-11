@@ -11,7 +11,7 @@ A manual trading cockpit application that helps traders make disciplined decisio
 
 ## Key Features
 ✅ **No Automatic Trading** - Manual decisions only  
-✅ **Multiple Data Sources** - Cascading API failover (yfinance → Alpha Vantage → Polygon.io)  
+✅ **Multiple Data Sources** - Cascading API failover (yfinance → Alpha Vantage → Massive API)  
 ✅ **Browser-Based Database** - SQLite via sql.js, persists in localStorage  
 ✅ **Risk Management Focus** - Invalidation levels, position sizing, thesis documentation  
 ✅ **Optional AI Integration** - OpenAI-powered portfolio analysis  
@@ -35,7 +35,7 @@ Edit `.env` file:
 ```bash
 # Optional - for backup data sources (yfinance works without keys)
 VITE_ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key
-VITE_POLYGON_API_KEY=your_polygon_key
+VITE_MASSIVE_API_KEY=your_massive_key
 
 # Optional - for AI reviews
 VITE_OPENAI_API_KEY=your_openai_key
@@ -43,8 +43,10 @@ VITE_OPENAI_API_KEY=your_openai_key
 
 **Getting API Keys:**
 - [Alpha Vantage](https://www.alphavantage.co/support/#api-key) - Free tier: 25 requests/day
-- [Polygon.io](https://polygon.io/) - Free tier: 5 calls/minute
+- [Polygon.io](https://polygon.io/) - Free tier: 5 calls/minute (Used by Massive API)
 - [OpenAI](https://platform.openai.com/api-keys) - Pay per use
+
+**Note**: The Massive API uses Polygon.io infrastructure. Register at polygon.io to get your API key.
 
 ### 3. Build and Run
 ```bash
@@ -112,7 +114,7 @@ User Action → UI Component → Database Operations → SQLite (browser)
    ↓ (if fails)
 2. Try Alpha Vantage - 25 requests/day
    ↓ (if fails)
-3. Try Polygon.io - 5 calls/minute
+3. Try Massive API - 5 calls/minute
    ↓ (if fails)
 4. Show error, continue with other symbols
 ```
@@ -210,7 +212,7 @@ The issue is documented in `IMPLEMENTATION.md` with potential solutions.
 ### "API rate limit exceeded"
 - yfinance: No rate limit
 - Alpha Vantage: 25/day - wait or use different key
-- Polygon.io: 5/minute - wait a minute
+- Massive API: 5/minute - wait a minute
 - System automatically fails over to next API
 
 ### "Symbol not found"
@@ -234,7 +236,7 @@ For issues, questions, or suggestions:
 - See `INTEGRATIONS.md` for API integration details
 
 ## Acknowledgments
-- Market data from Yahoo Finance, Alpha Vantage, and Polygon.io
+- Market data from Yahoo Finance, Alpha Vantage, and Massive API
 - Optional AI powered by OpenAI
 - Sentiment data from Reddit
 - Built with React, Vite, and Tailwind CSS

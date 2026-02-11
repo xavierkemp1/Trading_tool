@@ -17,20 +17,20 @@ interface APIResponse {
   success: boolean;
   data?: any;
   error?: string;
-  source?: 'yfinance' | 'alphavantage' | 'polygon';
+  source?: 'yfinance' | 'alphavantage' | 'massive';
 }
 
 interface MarketDataResult {
   symbol: string;
   prices: Price[];
-  source: 'yfinance' | 'alphavantage' | 'polygon';
+  source: 'yfinance' | 'alphavantage' | 'massive';
   timestamp: string;
 }
 
 interface FundamentalsResult {
   symbol: string;
   fundamentals: Fundamentals;
-  source: 'yfinance' | 'alphavantage' | 'polygon';
+  source: 'yfinance' | 'alphavantage' | 'massive';
   timestamp: string;
 }
 
@@ -39,7 +39,7 @@ interface CurrentPriceResult {
   price: number;
   change?: number;
   changePercent?: number;
-  source: 'yfinance' | 'alphavantage' | 'polygon';
+  source: 'yfinance' | 'alphavantage' | 'massive';
   timestamp: string;
 }
 
@@ -348,18 +348,18 @@ async function fetchAlphaVantageQuote(symbol: string): Promise<APIResponse> {
   }
 }
 
-// ============= POLYGON.IO API (Tertiary - 5 calls/minute) =============
+// ============= MASSIVE API (Tertiary - 5 calls/minute) =============
 
 /**
- * Fetch aggregates (OHLCV) from Polygon.io
+ * Fetch aggregates (OHLCV) from Massive API
  */
-async function fetchPolygonAggregates(symbol: string): Promise<APIResponse> {
-  const apiKey = import.meta.env.VITE_POLYGON_API_KEY;
+async function fetchMassiveAggregates(symbol: string): Promise<APIResponse> {
+  const apiKey = import.meta.env.VITE_MASSIVE_API_KEY;
   if (!apiKey) {
     return { success: false, error: 'API key not configured' };
   }
   
-  if (!canMakeAPICall('polygon', 5, 60 * 1000)) {
+  if (!canMakeAPICall('massive', 5, 60 * 1000)) {
     return { success: false, error: 'Rate limit exceeded (5/minute)' };
   }
   
@@ -392,7 +392,7 @@ async function fetchPolygonAggregates(symbol: string): Promise<APIResponse> {
     // Sort by date descending
     prices.sort((a, b) => b.date.localeCompare(a.date));
     
-    return { success: true, data: { prices }, source: 'polygon' };
+    return { success: true, data: { prices }, source: 'massive' };
   } catch (error) {
     return { 
       success: false, 
@@ -402,15 +402,15 @@ async function fetchPolygonAggregates(symbol: string): Promise<APIResponse> {
 }
 
 /**
- * Fetch ticker details from Polygon.io
+ * Fetch ticker details from Massive API
  */
-async function fetchPolygonTickerDetails(symbol: string): Promise<APIResponse> {
-  const apiKey = import.meta.env.VITE_POLYGON_API_KEY;
+async function fetchMassiveTickerDetails(symbol: string): Promise<APIResponse> {
+  const apiKey = import.meta.env.VITE_MASSIVE_API_KEY;
   if (!apiKey) {
     return { success: false, error: 'API key not configured' };
   }
   
-  if (!canMakeAPICall('polygon', 5, 60 * 1000)) {
+  if (!canMakeAPICall('massive', 5, 60 * 1000)) {
     return { success: false, error: 'Rate limit exceeded (5/minute)' };
   }
   
@@ -428,7 +428,7 @@ async function fetchPolygonTickerDetails(symbol: string): Promise<APIResponse> {
       return { success: false, error: 'No ticker details' };
     }
     
-    return { success: true, data: data.results, source: 'polygon' };
+    return { success: true, data: data.results, source: 'massive' };
   } catch (error) {
     return { 
       success: false, 
@@ -441,7 +441,7 @@ async function fetchPolygonTickerDetails(symbol: string): Promise<APIResponse> {
 
 /**
  * Fetch market data with cascading failover
- * Tries yfinance → Alpha Vantage → Polygon.io
+ * Tries yfinance → Alpha Vantage → Massive API
  */
 export async function fetchMarketData(symbol: string): Promise<MarketDataResult> {
   const upperSymbol = symbol.toUpperCase();
@@ -469,10 +469,10 @@ export async function fetchMarketData(symbol: string): Promise<MarketDataResult>
     response = await fetchAlphaVantageDaily(upperSymbol);
   }
   
-  // Fallback to Polygon
+  // Fallback to Massive
   if (!response.success) {
     console.warn(`Alpha Vantage failed for ${upperSymbol}: ${response.error}`);
-    response = await fetchPolygonAggregates(upperSymbol);
+    response = await fetchMassiveAggregates(upperSymbol);
   }
   
   if (!response.success) {
@@ -524,13 +524,13 @@ export async function fetchFundamentals(symbol: string): Promise<FundamentalsRes
   
   // Try Alpha Vantage first (has best fundamental data)
   let response = await fetchAlphaVantageOverview(upperSymbol);
-  let source: 'alphavantage' | 'polygon' = 'alphavantage';
+  let source: 'alphavantage' | 'massive' = 'alphavantage';
   
-  // Fallback to Polygon
+  // Fallback to Massive
   if (!response.success) {
     console.warn(`Alpha Vantage fundamentals failed for ${upperSymbol}: ${response.error}`);
-    response = await fetchPolygonTickerDetails(upperSymbol);
-    source = 'polygon';
+    response = await fetchMassiveTickerDetails(upperSymbol);
+    source = 'massive';
   }
   
   if (!response.success) {
@@ -564,7 +564,7 @@ export async function fetchFundamentals(symbol: string): Promise<FundamentalsRes
       asset_class: 'stock',
       currency: 'USD'
     });
-  } else if (source === 'polygon') {
+  } else if (source === 'massive') {
     const data = response.data;
     fundamentals.market_cap = data.market_cap;
     

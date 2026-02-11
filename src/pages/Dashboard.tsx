@@ -20,15 +20,18 @@ export default function Dashboard() {
     try {
       const positions = getAllPositions();
       
-      // Calculate portfolio value
+      // Calculate portfolio value and change
       let totalValue = 0;
+      let totalCost = 0;
       const positionAlerts: AlertItem[] = [];
       
       for (const position of positions) {
         const latestPrice = getLatestPrice(position.symbol);
         if (latestPrice) {
           const positionValue = latestPrice.close * position.qty;
+          const positionCost = position.avg_cost * position.qty;
           totalValue += positionValue;
+          totalCost += positionCost;
           
           // Generate alerts using rules
           try {
@@ -72,6 +75,7 @@ export default function Dashboard() {
       }
       
       setPortfolioValue(totalValue);
+      setPortfolioChange(totalValue - totalCost);
       setAlerts(positionAlerts.slice(0, 10)); // Cap at 10
       
       // Calculate regime based on benchmarks
@@ -224,6 +228,7 @@ export default function Dashboard() {
           <SectionHeader title="Portfolio summary" />
           <div className="mt-4 grid gap-2">
             <StatPill label="Total value" value={portfolioValue > 0 ? `$${portfolioValue.toLocaleString()}` : '—'} />
+            <StatPill label="Total gain/loss" value={portfolioChange !== 0 ? `${portfolioChange >= 0 ? '+' : ''}$${portfolioChange.toLocaleString()}` : '—'} />
             <StatPill label="Positions" value={`${getAllPositions().length}`} />
           </div>
         </div>
@@ -256,6 +261,56 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="mt-4 text-sm text-slate-400">No alerts. All positions look good.</div>
+        )}
+      </div>
+
+      <div className="card">
+        <SectionHeader title="Current Positions" subtitle="Real-time portfolio holdings" />
+        {getAllPositions().length > 0 ? (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-800">
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-slate-400">Symbol</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-400">Quantity</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-400">Avg Cost</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-400">Current Price</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-400">Value</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-400">Gain/Loss</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-400">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {getAllPositions().map((position) => {
+                  const latestPrice = getLatestPrice(position.symbol);
+                  if (!latestPrice) return null;
+                  
+                  const currentPrice = latestPrice.close;
+                  const value = currentPrice * position.qty;
+                  const gainLoss = (currentPrice - position.avg_cost) * position.qty;
+                  const gainLossPct = ((currentPrice - position.avg_cost) / position.avg_cost) * 100;
+                  
+                  return (
+                    <tr key={position.symbol} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                      <td className="px-3 py-2 font-semibold text-slate-100">{position.symbol}</td>
+                      <td className="px-3 py-2 text-right text-slate-300">{position.qty}</td>
+                      <td className="px-3 py-2 text-right text-slate-300">${position.avg_cost.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right text-slate-300">${currentPrice.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right text-slate-300">${value.toLocaleString()}</td>
+                      <td className={`px-3 py-2 text-right font-semibold ${gainLoss >= 0 ? 'text-green-400' : 'text-rose-400'}`}>
+                        {gainLoss >= 0 ? '+' : ''}${gainLoss.toFixed(2)}
+                      </td>
+                      <td className={`px-3 py-2 text-right font-semibold ${gainLossPct >= 0 ? 'text-green-400' : 'text-rose-400'}`}>
+                        {gainLossPct >= 0 ? '+' : ''}{gainLossPct.toFixed(2)}%
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="mt-4 text-sm text-slate-400">No positions found. Add positions in the Current Investments page.</div>
         )}
       </div>
 
