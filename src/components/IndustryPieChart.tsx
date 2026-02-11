@@ -66,7 +66,7 @@ export default function IndustryPieChart() {
       .sort((a, b) => b.value - a.value); // Sort by value descending
     
     return result;
-  }, []);
+  }, [getAllPositions().length]); // Update when number of positions changes
 
   if (industryData.length === 0) {
     return (
