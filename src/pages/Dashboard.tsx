@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import SectionHeader from '../components/SectionHeader';
 import StatPill from '../components/StatPill';
+import IndustryPieChart from '../components/IndustryPieChart';
 import { useApp } from '../lib/AppContext';
 import { getAllPositions, getLatestPrice, getSymbol } from '../lib/db';
 import { refreshAllData, calculateIndicators } from '../lib/dataService';
@@ -262,6 +263,13 @@ export default function Dashboard() {
         ) : (
           <div className="mt-4 text-sm text-slate-400">No alerts. All positions look good.</div>
         )}
+      </div>
+
+      <div className="card">
+        <SectionHeader title="Industry Allocation" subtitle="Portfolio breakdown by industry sector" />
+        <div className="mt-4">
+          <IndustryPieChart />
+        </div>
       </div>
 
       <div className="card">
