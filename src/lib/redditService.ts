@@ -43,6 +43,13 @@ const DEEP_DIVE_CACHE_KEY = 'reddit_deep_dives';
 const DEEP_DIVE_SUBREDDITS = ['wallstreetbets', 'stocks', 'investing', 'stockmarket', 'SecurityAnalysis'];
 const SUBREDDITS = ['wallstreetbets', 'stocks', 'options'];
 
+/**
+ * Get the proxy URL from environment or default
+ */
+function getProxyUrl(): string {
+  return import.meta.env.VITE_PROXY_URL || 'http://localhost:3001';
+}
+
 // Common stock ticker patterns
 const TICKER_REGEX = /\b[A-Z]{2,5}\b/g;
 
@@ -177,12 +184,9 @@ export async function fetchRedditSentiment(symbols: string[]): Promise<RedditSen
   // Fetch from each subreddit
   for (const subreddit of SUBREDDITS) {
     try {
-      const url = `https://www.reddit.com/r/${subreddit}/top.json?limit=100&t=week`;
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'web:trading-app:v1.0.0 (for educational/research purposes)'
-        }
-      });
+      const proxyUrl = getProxyUrl();
+      const url = `${proxyUrl}/api/reddit?subreddit=${subreddit}&sort=top&limit=100&t=week`;
+      const response = await fetch(url);
       
       if (!response.ok) {
         console.warn(`Failed to fetch from r/${subreddit}: ${response.status}`);
@@ -321,12 +325,9 @@ export async function fetchRedditDeepDives(maxPosts: number = 10): Promise<Reddi
   // Fetch from each subreddit
   for (const subreddit of DEEP_DIVE_SUBREDDITS) {
     try {
-      const url = `https://www.reddit.com/r/${subreddit}/hot.json?limit=20`;
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'web:trading-app:v1.0.0 (for educational/research purposes)'
-        }
-      });
+      const proxyUrl = getProxyUrl();
+      const url = `${proxyUrl}/api/reddit?subreddit=${subreddit}&sort=hot&limit=20`;
+      const response = await fetch(url);
       
       if (!response.ok) {
         console.warn(`Failed to fetch from r/${subreddit}: ${response.status}`);
