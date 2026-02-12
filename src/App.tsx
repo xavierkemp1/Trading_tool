@@ -5,6 +5,7 @@ import CurrentInvestments from './pages/CurrentInvestments';
 import ExploreIdeas from './pages/ExploreIdeas';
 import PortfolioRisk from './pages/PortfolioRisk';
 import JournalReview from './pages/JournalReview';
+import Settings from './pages/Settings';
 import { AppProvider, useApp } from './lib/AppContext';
 
 const pages = {
@@ -12,7 +13,8 @@ const pages = {
   'Current Investments': CurrentInvestments,
   'Explore / New Ideas': ExploreIdeas,
   'Portfolio & Risk': PortfolioRisk,
-  'Journal & AI Review': JournalReview
+  'Journal & AI Review': JournalReview,
+  'Settings': Settings
 } as const;
 
 type PageKey = keyof typeof pages;
