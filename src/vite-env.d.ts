@@ -3,6 +3,8 @@
 interface ImportMetaEnv {
   readonly VITE_ALPHA_VANTAGE_API_KEY?: string;
   readonly VITE_MASSIVE_API_KEY?: string;
+  readonly VITE_PROXY_URL?: string;
+  readonly VITE_TWITTER_API_KEY?: string;
 }
 
 interface ImportMeta {
