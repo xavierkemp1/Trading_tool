@@ -127,7 +127,7 @@ export default function Settings() {
             >
               <span
                 className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-                  settings.reddit.enabled ? 'translate-x-5' : 'translate-x-0.5'
+                  settings.reddit.enabled ? 'translate-x-[1.375rem]' : 'translate-x-0.5'
                 }`}
               />
             </button>
@@ -188,7 +188,7 @@ export default function Settings() {
             >
               <span
                 className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-                  settings.twitter.enabled ? 'translate-x-5' : 'translate-x-0.5'
+                  settings.twitter.enabled ? 'translate-x-[1.375rem]' : 'translate-x-0.5'
                 }`}
               />
             </button>
@@ -280,7 +280,7 @@ export default function Settings() {
             >
               <span
                 className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-                  settings.openai.enabled ? 'translate-x-5' : 'translate-x-0.5'
+                  settings.openai.enabled ? 'translate-x-[1.375rem]' : 'translate-x-0.5'
                 }`}
               />
             </button>
