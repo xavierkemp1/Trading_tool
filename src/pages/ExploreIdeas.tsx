@@ -99,7 +99,7 @@ export default function ExploreIdeas() {
     loadTwitterFeed();
   }, [loadWatchlist]);
 
-  const loadRedditSentiment = async () => {
+  const loadRedditSentiment = async (forceRefresh = false) => {
     if (!isRedditEnabled()) {
       return;
     }
@@ -113,6 +113,12 @@ export default function ExploreIdeas() {
         ? watchlist.slice(0, 10).map(w => w.symbol)
         : ['NVDA', 'AVGO', 'RTX', 'TSLA', 'AAPL', 'MSFT', 'GOOGL'];
 
+      // Clear cache if force refresh is requested
+      if (forceRefresh) {
+        const { clearRedditCache } = await import('../lib/redditService');
+        clearRedditCache();
+      }
+
       const sentiment = await fetchRedditSentiment(symbols);
       setRedditSentiment(sentiment.filter(s => s.mentions > 0));
     } catch (err) {
@@ -124,7 +130,7 @@ export default function ExploreIdeas() {
     }
   };
 
-  const loadRedditDeepDives = async () => {
+  const loadRedditDeepDives = async (forceRefresh = false) => {
     if (!isRedditEnabled()) {
       return;
     }
@@ -133,6 +139,12 @@ export default function ExploreIdeas() {
     setDeepDivesError(null);
 
     try {
+      // Clear cache if force refresh is requested
+      if (forceRefresh) {
+        const { clearRedditCache } = await import('../lib/redditService');
+        clearRedditCache();
+      }
+
       const deepDives = await fetchRedditDeepDives(10);
       setRedditDeepDives(deepDives);
       setDeepDivesLastFetch(getLastDeepDiveFetchTimestamp());
@@ -145,7 +157,7 @@ export default function ExploreIdeas() {
     }
   };
 
-  const loadTwitterFeed = async () => {
+  const loadTwitterFeed = async (forceRefresh = false) => {
     if (!isTwitterEnabled()) {
       return;
     }
@@ -159,6 +171,12 @@ export default function ExploreIdeas() {
     setTwitterError(null);
 
     try {
+      // Clear cache if force refresh is requested
+      if (forceRefresh) {
+        const { clearTwitterCache } = await import('../lib/twitterService');
+        clearTwitterCache();
+      }
+
       const tweets = await fetchTwitterFeed(20);
       setTwitterFeed(tweets);
       setTwitterLastFetch(getLastFetchTimestamp(settings.twitter.followedAccounts));
@@ -329,7 +347,7 @@ export default function ExploreIdeas() {
           <SectionHeader title="Narrative signals" subtitle="Optional Reddit clustering (cached)" />
           {isRedditEnabled() && (
             <button
-              onClick={loadRedditSentiment}
+              onClick={() => loadRedditSentiment(true)}
               disabled={redditLoading}
               className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800 disabled:opacity-50"
             >
@@ -393,7 +411,7 @@ export default function ExploreIdeas() {
               </div>
               {isRedditEnabled() && (
                 <button
-                  onClick={loadRedditDeepDives}
+                  onClick={() => loadRedditDeepDives(true)}
                   disabled={deepDivesLoading}
                   className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800 disabled:opacity-50"
                 >
@@ -464,7 +482,7 @@ export default function ExploreIdeas() {
               </div>
               {isTwitterEnabled() && (
                 <button
-                  onClick={loadTwitterFeed}
+                  onClick={() => loadTwitterFeed(true)}
                   disabled={twitterLoading}
                   className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800 disabled:opacity-50"
                 >
