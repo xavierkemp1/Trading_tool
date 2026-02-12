@@ -4,9 +4,12 @@ import schemaSQL from './db/migrations/001_init.sql';
 const DB_KEY = 'trading_app_db';
 const DB_VERSION = 1;
 const MAX_FILE_PATH_LENGTH = 100; // Max length to distinguish file paths from SQL content
+const SAVE_DEBOUNCE_MS = 2000; // Debounce database saves by 2 seconds
 
 let dbInstance: Database | null = null;
 let sqlJs: SqlJsStatic | null = null;
+let saveTimeout: number | null = null;
+let pendingSave = false;
 
 /**
  * Initialize sql.js and load the database
@@ -47,8 +50,8 @@ export async function initDatabase(): Promise<Database> {
         await loadSchema(dbInstance);
       }
       
-      // Save to localStorage
-      await saveDatabase();
+      // Save to localStorage immediately for initial creation
+      await saveDatabaseImmediate();
       console.log('New database created and schema loaded');
     }
 
@@ -97,17 +100,52 @@ async function loadSchema(db: Database): Promise<void> {
 }
 
 /**
- * Save database to localStorage
+ * Save database to localStorage with debouncing
  */
 export async function saveDatabase(): Promise<void> {
   if (!dbInstance) {
     throw new Error('Database not initialized');
   }
 
+  // Clear existing timeout
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+  }
+
+  // Mark that we have a pending save
+  pendingSave = true;
+
+  // Set up debounced save
+  saveTimeout = setTimeout(() => {
+    saveDatabaseImmediate();
+  }, SAVE_DEBOUNCE_MS) as unknown as number;
+}
+
+/**
+ * Save database to localStorage immediately without debouncing
+ */
+export async function saveDatabaseImmediate(): Promise<void> {
+  if (!dbInstance) {
+    throw new Error('Database not initialized');
+  }
+
   try {
     const data = dbInstance.export();
-    const base64 = btoa(String.fromCharCode(...data));
+    
+    // Convert Uint8Array to base64 in chunks to prevent stack overflow
+    const chunkSize = 65536; // 64KB chunks
+    let base64String = '';
+    for (let i = 0; i < data.length; i += chunkSize) {
+      const chunk = data.subarray(i, Math.min(i + chunkSize, data.length));
+      base64String += String.fromCharCode(...chunk);
+    }
+    
+    const base64 = btoa(base64String);
     localStorage.setItem(DB_KEY, base64);
+    
+    // Clear pending save flag
+    pendingSave = false;
+    saveTimeout = null;
   } catch (error) {
     console.error('Failed to save database:', error);
     throw new Error('Database save failed');
@@ -167,8 +205,8 @@ export async function importDatabase(file: File): Promise<void> {
     // Create new database from imported data
     dbInstance = new sqlJs.Database(data);
     
-    // Save to localStorage
-    await saveDatabase();
+    // Save to localStorage immediately for imports
+    await saveDatabaseImmediate();
   } catch (error) {
     console.error('Failed to import database:', error);
     throw new Error('Database import failed');
