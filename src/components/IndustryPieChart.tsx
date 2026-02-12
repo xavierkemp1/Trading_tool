@@ -95,6 +95,7 @@ export default function IndustryPieChart() {
             outerRadius={100}
             fill="#8884d8"
             dataKey="value"
+            nameKey="industry"
           >
             {industryData.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -128,10 +129,12 @@ export default function IndustryPieChart() {
             verticalAlign="bottom"
             height={36}
             formatter={(value, entry: any) => {
-              const item = industryData.find(d => d.industry === value);
+              // entry.value contains the industry name due to nameKey="industry" on the Pie component
+              const industryName = entry.value;
+              const item = industryData.find(d => d.industry === industryName);
               return (
                 <span className="text-xs text-slate-300">
-                  {value} ({item?.percentage.toFixed(1)}%)
+                  {industryName} ({item?.percentage.toFixed(1)}%)
                 </span>
               );
             }}

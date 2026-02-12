@@ -87,8 +87,11 @@ await initDatabase(): Promise<Database>
 // Get database instance (after initialization)
 getDatabase(): Database
 
-// Save current state to localStorage
-await saveDatabase(): Promise<void>
+// Save current state to localStorage (debounced - waits 2 seconds)
+saveDatabase(): void
+
+// Save current state to localStorage immediately (no debouncing)
+await saveDatabaseImmediate(): Promise<void>
 
 // Clear database and reset to initial schema
 await resetDatabase(): Promise<void>
@@ -166,7 +169,9 @@ deleteReview(id: number): void
 
 The database automatically persists to `localStorage` under the key `trading_app_db`. The data is stored as a base64-encoded binary blob. 
 
-**Important:** Most database operations automatically call `saveDatabase()` internally to persist changes. Only `initDatabase()` and database import/export operations are async.
+**Important:** Database operations automatically trigger a debounced save (2-second delay) to optimize performance. This prevents excessive writes when performing multiple operations in quick succession. For critical operations like database initialization or import, `saveDatabaseImmediate()` is used to ensure data is persisted immediately.
+
+**Performance Optimization:** The debounced save mechanism reduces thousands of potential localStorage writes during bulk operations (e.g., refreshing price data for multiple symbols) down to a single save operation, dramatically improving performance and preventing stack overflow errors.
 
 ## Error Handling
 

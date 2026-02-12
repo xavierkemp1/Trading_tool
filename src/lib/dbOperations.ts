@@ -1,4 +1,4 @@
-import { getDatabase, saveDatabase } from './database';
+import { getDatabase, saveDatabase, saveDatabaseImmediate } from './database';
 import type { ThesisTag, TimeHorizon } from './types';
 
 // ============= TYPE DEFINITIONS =============
