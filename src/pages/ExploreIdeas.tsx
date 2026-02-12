@@ -203,20 +203,6 @@ export default function ExploreIdeas() {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const formatTimestamp = (timestamp: number | null): string => {
-    if (!timestamp) return 'Never';
-    
-    const now = Date.now();
-    const diff = now - timestamp;
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    return new Date(timestamp).toLocaleDateString();
-  };
-
   const formatRelativeTime = (timestamp: number): string => {
     const now = Date.now();
     const diff = now - timestamp;
@@ -229,6 +215,11 @@ export default function ExploreIdeas() {
     if (hours < 24) return `${hours}h ago`;
     if (days < 7) return `${days}d ago`;
     return new Date(timestamp).toLocaleDateString();
+  };
+
+  const formatTimestamp = (timestamp: number | null): string => {
+    if (!timestamp) return 'Never';
+    return formatRelativeTime(timestamp);
   };
 
   const handleAnalyzeFiles = async () => {

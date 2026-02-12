@@ -366,14 +366,14 @@ export async function fetchRedditDeepDives(maxPosts: number = 10): Promise<Reddi
           }
           
           deepDives.push({
-            id: `${subreddit}_${post.data.created_utc}`,
+            id: `${subreddit}_${post.data.id || post.data.created_utc}`,
             title: post.data.title,
             author: `u/${post.data.author || 'deleted'}`,
             subreddit: `r/${subreddit}`,
             upvotes: post.data.score,
             comments: post.data.num_comments,
             preview,
-            url: `https://www.reddit.com/r/${subreddit}/comments/${post.data.id}`,
+            url: `https://www.reddit.com/r/${subreddit}/comments/${post.data.id || ''}`,
             created: post.data.created_utc * 1000 // Convert to milliseconds
           });
         }

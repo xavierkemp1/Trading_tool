@@ -166,14 +166,14 @@ export async function fetchTwitterFeed(maxTweets: number = 20): Promise<Tweet[]>
         
         // Mock data for demonstration
         const mockTweet: Tweet = {
-          id: `${account}_${Date.now()}_1`,
+          id: `${account}_mock_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           author: account.replace('_', ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
           authorHandle: `@${account}`,
           content: `Latest market insights from ${account} - This is a sample tweet. Configure VITE_TWITTER_API_KEY to see real tweets.`,
           timestamp: Date.now() - Math.random() * 86400000, // Random time in last 24h
           likes: Math.floor(Math.random() * 1000),
           retweets: Math.floor(Math.random() * 100),
-          url: `https://twitter.com/${account}/status/${Date.now()}`
+          url: `https://twitter.com/${account}/status/mock_${Date.now()}`
         };
         
         tweets.push(mockTweet);
