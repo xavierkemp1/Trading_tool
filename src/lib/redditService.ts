@@ -8,13 +8,27 @@ export interface RedditSentiment {
   themes: string[];
 }
 
+export interface RedditDeepDive {
+  id: string;
+  title: string;
+  author: string;
+  subreddit: string;
+  upvotes: number;
+  comments: number;
+  preview: string;
+  url: string;
+  created: number;
+}
+
 interface RedditPost {
   data: {
+    id?: string;
     title: string;
     selftext: string;
     score: number;
     num_comments: number;
     created_utc: number;
+    author?: string;
   };
 }
 
@@ -25,6 +39,8 @@ interface RedditListing {
 }
 
 const CACHE_KEY_PREFIX = 'reddit_sentiment_';
+const DEEP_DIVE_CACHE_KEY = 'reddit_deep_dives';
+const DEEP_DIVE_SUBREDDITS = ['wallstreetbets', 'stocks', 'investing', 'stockmarket', 'SecurityAnalysis'];
 const SUBREDDITS = ['wallstreetbets', 'stocks', 'options'];
 
 // Common stock ticker patterns
@@ -246,11 +262,151 @@ export function clearRedditCache(): void {
   try {
     const keys = Object.keys(localStorage);
     for (const key of keys) {
-      if (key.startsWith(CACHE_KEY_PREFIX)) {
+      if (key.startsWith(CACHE_KEY_PREFIX) || key === DEEP_DIVE_CACHE_KEY) {
         localStorage.removeItem(key);
       }
     }
   } catch (err) {
     console.error('Failed to clear Reddit cache:', err);
+  }
+}
+
+function getCachedDeepDives(): RedditDeepDive[] | null {
+  const settings = getSettings();
+  
+  try {
+    const cached = localStorage.getItem(DEEP_DIVE_CACHE_KEY);
+    if (!cached) return null;
+    
+    const data = JSON.parse(cached);
+    const cacheAge = Date.now() - data.timestamp;
+    const maxAge = settings.reddit.cacheHours * 60 * 60 * 1000;
+    
+    if (cacheAge < maxAge) {
+      return data.deepDives;
+    }
+  } catch (err) {
+    console.error('Failed to read Reddit deep dive cache:', err);
+  }
+  
+  return null;
+}
+
+function setCachedDeepDives(deepDives: RedditDeepDive[]): void {
+  try {
+    localStorage.setItem(DEEP_DIVE_CACHE_KEY, JSON.stringify({
+      timestamp: Date.now(),
+      deepDives
+    }));
+  } catch (err) {
+    console.error('Failed to cache Reddit deep dives:', err);
+  }
+}
+
+export async function fetchRedditDeepDives(maxPosts: number = 10): Promise<RedditDeepDive[]> {
+  const settings = getSettings();
+  
+  if (!settings.reddit.enabled) {
+    throw new Error('Reddit integration is disabled in settings');
+  }
+  
+  // Check cache first
+  const cached = getCachedDeepDives();
+  if (cached) {
+    return cached;
+  }
+  
+  const deepDives: RedditDeepDive[] = [];
+  
+  // Fetch from each subreddit
+  for (const subreddit of DEEP_DIVE_SUBREDDITS) {
+    try {
+      const url = `https://www.reddit.com/r/${subreddit}/hot.json?limit=20`;
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'web:trading-app:v1.0.0 (for educational/research purposes)'
+        }
+      });
+      
+      if (!response.ok) {
+        console.warn(`Failed to fetch from r/${subreddit}: ${response.status}`);
+        
+        // Rate limited - wait and continue
+        if (response.status === 429) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+        continue;
+      }
+      
+      const data: RedditListing = await response.json();
+      
+      for (const post of data.data.children) {
+        const title = post.data.title.toLowerCase();
+        const selftext = post.data.selftext.toLowerCase();
+        
+        // Filter for stock analysis posts (DD = Due Diligence, thesis, analysis, etc.)
+        const isStockAnalysis = 
+          title.includes('dd') || 
+          title.includes('due diligence') ||
+          title.includes('thesis') ||
+          title.includes('analysis') ||
+          title.includes('deep dive') ||
+          selftext.includes('bull case') ||
+          selftext.includes('bear case') ||
+          (post.data.selftext.length > 500 && post.data.score > 50); // Long posts with good engagement
+        
+        if (isStockAnalysis) {
+          // Create preview (first 200 chars of content)
+          let preview = post.data.selftext.substring(0, 200);
+          if (post.data.selftext.length > 200) {
+            preview += '...';
+          }
+          if (!preview) {
+            preview = 'Click to read full analysis on Reddit';
+          }
+          
+          deepDives.push({
+            id: `${subreddit}_${post.data.created_utc}`,
+            title: post.data.title,
+            author: `u/${post.data.author || 'deleted'}`,
+            subreddit: `r/${subreddit}`,
+            upvotes: post.data.score,
+            comments: post.data.num_comments,
+            preview,
+            url: `https://www.reddit.com/r/${subreddit}/comments/${post.data.id}`,
+            created: post.data.created_utc * 1000 // Convert to milliseconds
+          });
+        }
+      }
+      
+      // Be nice to Reddit's API
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+    } catch (err) {
+      console.error(`Error fetching from r/${subreddit}:`, err);
+    }
+  }
+  
+  // Sort by upvotes (most popular first)
+  deepDives.sort((a, b) => b.upvotes - a.upvotes);
+  
+  // Limit to maxPosts
+  const limitedDeepDives = deepDives.slice(0, maxPosts);
+  
+  // Cache results
+  setCachedDeepDives(limitedDeepDives);
+  
+  return limitedDeepDives;
+}
+
+export function getLastDeepDiveFetchTimestamp(): number | null {
+  try {
+    const cached = localStorage.getItem(DEEP_DIVE_CACHE_KEY);
+    if (!cached) return null;
+    
+    const data = JSON.parse(cached);
+    return data.timestamp;
+  } catch (err) {
+    return null;
   }
 }

@@ -5,7 +5,8 @@ const navItems = [
   'Current Investments',
   'Explore / New Ideas',
   'Portfolio & Risk',
-  'Journal & AI Review'
+  'Journal & AI Review',
+  'Settings'
 ] as const;
 
 interface SidebarProps {

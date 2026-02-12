@@ -3,8 +3,9 @@ import SectionHeader from '../components/SectionHeader';
 import WatchlistManager from '../components/WatchlistManager';
 import { getAllWatchlist, getLatestPrice, getSymbol } from '../lib/db';
 import { calculateIndicators } from '../lib/dataService';
-import { fetchRedditSentiment, type RedditSentiment } from '../lib/redditService';
-import { isRedditEnabled } from '../lib/settingsService';
+import { fetchRedditSentiment, fetchRedditDeepDives, getLastDeepDiveFetchTimestamp, type RedditSentiment, type RedditDeepDive } from '../lib/redditService';
+import { fetchTwitterFeed, getLastFetchTimestamp, type Tweet } from '../lib/twitterService';
+import { isRedditEnabled, isTwitterEnabled, getSettings } from '../lib/settingsService';
 import { analyzeFileContent } from '../lib/openaiService';
 import type { WatchlistItem } from '../lib/types';
 
@@ -32,6 +33,18 @@ export default function ExploreIdeas() {
   const [fileAnalysisLoading, setFileAnalysisLoading] = useState(false);
   const [fileAnalysisResult, setFileAnalysisResult] = useState<string | null>(null);
   const [fileAnalysisError, setFileAnalysisError] = useState<string | null>(null);
+
+  // Reddit deep dives state
+  const [redditDeepDives, setRedditDeepDives] = useState<RedditDeepDive[]>([]);
+  const [deepDivesLoading, setDeepDivesLoading] = useState(false);
+  const [deepDivesError, setDeepDivesError] = useState<string | null>(null);
+  const [deepDivesLastFetch, setDeepDivesLastFetch] = useState<number | null>(null);
+
+  // Twitter feed state
+  const [twitterFeed, setTwitterFeed] = useState<Tweet[]>([]);
+  const [twitterLoading, setTwitterLoading] = useState(false);
+  const [twitterError, setTwitterError] = useState<string | null>(null);
+  const [twitterLastFetch, setTwitterLastFetch] = useState<number | null>(null);
 
   const loadWatchlist = useCallback(async () => {
     setLoading(true);
@@ -82,6 +95,8 @@ export default function ExploreIdeas() {
   useEffect(() => {
     loadWatchlist();
     loadRedditSentiment();
+    loadRedditDeepDives();
+    loadTwitterFeed();
   }, [loadWatchlist]);
 
   const loadRedditSentiment = async () => {
@@ -106,6 +121,53 @@ export default function ExploreIdeas() {
       console.error('Reddit sentiment fetch failed:', err);
     } finally {
       setRedditLoading(false);
+    }
+  };
+
+  const loadRedditDeepDives = async () => {
+    if (!isRedditEnabled()) {
+      return;
+    }
+
+    setDeepDivesLoading(true);
+    setDeepDivesError(null);
+
+    try {
+      const deepDives = await fetchRedditDeepDives(10);
+      setRedditDeepDives(deepDives);
+      setDeepDivesLastFetch(getLastDeepDiveFetchTimestamp());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load Reddit deep dives';
+      setDeepDivesError(message);
+      console.error('Reddit deep dives fetch failed:', err);
+    } finally {
+      setDeepDivesLoading(false);
+    }
+  };
+
+  const loadTwitterFeed = async () => {
+    if (!isTwitterEnabled()) {
+      return;
+    }
+
+    const settings = getSettings();
+    if (settings.twitter.followedAccounts.length === 0) {
+      return;
+    }
+
+    setTwitterLoading(true);
+    setTwitterError(null);
+
+    try {
+      const tweets = await fetchTwitterFeed(20);
+      setTwitterFeed(tweets);
+      setTwitterLastFetch(getLastFetchTimestamp(settings.twitter.followedAccounts));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load Twitter feed';
+      setTwitterError(message);
+      console.error('Twitter feed fetch failed:', err);
+    } finally {
+      setTwitterLoading(false);
     }
   };
 
@@ -139,6 +201,34 @@ export default function ExploreIdeas() {
 
   const handleRemoveFile = (index: number) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const formatTimestamp = (timestamp: number | null): string => {
+    if (!timestamp) return 'Never';
+    
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return new Date(timestamp).toLocaleDateString();
+  };
+
+  const formatRelativeTime = (timestamp: number): string => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    
+    if (minutes < 1) return 'just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return new Date(timestamp).toLocaleDateString();
   };
 
   const handleAnalyzeFiles = async () => {
@@ -294,6 +384,154 @@ export default function ExploreIdeas() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Social Media Feeds Section */}
+      <div className="card">
+        <SectionHeader title="Social Media Feeds" subtitle="Market sentiment from Reddit and Twitter" />
+        
+        <div className="mt-4 grid gap-6 md:grid-cols-2">
+          {/* Reddit Deep Dives Feed */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-100">Reddit Stock Deep Dives</h3>
+                <p className="text-xs text-slate-400">
+                  Last updated: {formatTimestamp(deepDivesLastFetch)}
+                </p>
+              </div>
+              {isRedditEnabled() && (
+                <button
+                  onClick={loadRedditDeepDives}
+                  disabled={deepDivesLoading}
+                  className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {deepDivesLoading ? 'Loading...' : 'Refresh'}
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {!isRedditEnabled() ? (
+                <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-400">
+                  Reddit integration is disabled. Enable it in settings to see deep dives.
+                </div>
+              ) : deepDivesError ? (
+                <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+                  {deepDivesError}
+                </div>
+              ) : deepDivesLoading ? (
+                <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-400">
+                  Loading deep dives...
+                </div>
+              ) : redditDeepDives.length === 0 ? (
+                <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-400">
+                  No deep dive posts found. Try refreshing.
+                </div>
+              ) : (
+                redditDeepDives.map((post) => (
+                  <a
+                    key={post.id}
+                    href={post.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block rounded-lg border border-slate-800 bg-slate-900/60 p-3 transition-colors hover:bg-slate-800/50"
+                  >
+                    <div className="mb-2 flex items-start justify-between gap-2">
+                      <h4 className="text-sm font-medium text-slate-100 line-clamp-2">
+                        {post.title}
+                      </h4>
+                    </div>
+                    <p className="mb-2 text-xs text-slate-400 line-clamp-2">
+                      {post.preview}
+                    </p>
+                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                      <span>{post.author}</span>
+                      <span>•</span>
+                      <span>{post.subreddit}</span>
+                      <span>•</span>
+                      <span>↑ {post.upvotes}</span>
+                      <span>•</span>
+                      <span>💬 {post.comments}</span>
+                      <span>•</span>
+                      <span>{formatRelativeTime(post.created)}</span>
+                    </div>
+                  </a>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Twitter Feed */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-100">Twitter Feed</h3>
+                <p className="text-xs text-slate-400">
+                  Last updated: {formatTimestamp(twitterLastFetch)}
+                </p>
+              </div>
+              {isTwitterEnabled() && (
+                <button
+                  onClick={loadTwitterFeed}
+                  disabled={twitterLoading}
+                  className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {twitterLoading ? 'Loading...' : 'Refresh'}
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {!isTwitterEnabled() ? (
+                <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-400">
+                  Twitter integration is disabled. Enable it in settings to see tweets.
+                </div>
+              ) : getSettings().twitter.followedAccounts.length === 0 ? (
+                <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-400">
+                  No Twitter accounts configured. Add accounts in settings to see tweets.
+                </div>
+              ) : twitterError ? (
+                <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+                  {twitterError}
+                </div>
+              ) : twitterLoading ? (
+                <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-400">
+                  Loading tweets...
+                </div>
+              ) : twitterFeed.length === 0 ? (
+                <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-400">
+                  No tweets found. Try refreshing or add more accounts in settings.
+                </div>
+              ) : (
+                twitterFeed.map((tweet) => (
+                  <a
+                    key={tweet.id}
+                    href={tweet.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block rounded-lg border border-slate-800 bg-slate-900/60 p-3 transition-colors hover:bg-slate-800/50"
+                  >
+                    <div className="mb-2 flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium text-slate-100">{tweet.author}</p>
+                        <p className="text-xs text-slate-500">{tweet.authorHandle}</p>
+                      </div>
+                      <span className="text-xs text-slate-500">{formatRelativeTime(tweet.timestamp)}</span>
+                    </div>
+                    <p className="mb-2 text-sm text-slate-300">
+                      {tweet.content}
+                    </p>
+                    <div className="flex items-center gap-4 text-xs text-slate-500">
+                      <span>❤️ {tweet.likes}</span>
+                      <span>🔄 {tweet.retweets}</span>
+                    </div>
+                  </a>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="card">

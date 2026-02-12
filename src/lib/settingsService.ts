@@ -16,6 +16,11 @@ export interface Settings {
     sources: string[];
     cacheHours: number;
   };
+  twitter: {
+    enabled: boolean;
+    followedAccounts: string[];
+    cacheHours: number;
+  };
   openai: {
     enabled: boolean;
     model: string;
@@ -44,6 +49,10 @@ export function getSettings(): Settings {
         reddit: {
           ...defaultSettings.reddit,
           ...(userSettings.reddit || {})
+        },
+        twitter: {
+          ...defaultSettings.twitter,
+          ...(userSettings.twitter || {})
         },
         openai: {
           ...defaultSettings.openai,
@@ -76,6 +85,10 @@ export function updateSettings(settings: Partial<Settings>): void {
         ...current.reddit,
         ...(settings.reddit || {})
       },
+      twitter: {
+        ...current.twitter,
+        ...(settings.twitter || {})
+      },
       openai: {
         ...current.openai,
         ...(settings.openai || {})
@@ -99,4 +112,9 @@ export function isOpenAIEnabled(): boolean {
 export function isRedditEnabled(): boolean {
   const settings = getSettings();
   return settings.reddit.enabled;
+}
+
+export function isTwitterEnabled(): boolean {
+  const settings = getSettings();
+  return settings.twitter.enabled;
 }
