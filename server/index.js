@@ -148,6 +148,7 @@ app.get('/api/reddit', throttleMiddleware, async (req, res) => {
   }
   
   // Validate time range parameter if provided
+  // Note: Reddit only uses 't' parameter with 'top' sort
   if (t) {
     const validTimeRanges = ['hour', 'day', 'week', 'month', 'year', 'all'];
     if (!validTimeRanges.includes(t)) {
