@@ -121,10 +121,65 @@ app.get('/api/quote/:symbol', throttleMiddleware, async (req, res) => {
   }
 });
 
+// Proxy endpoint for Reddit API
+app.get('/api/reddit', throttleMiddleware, async (req, res) => {
+  const { subreddit, sort = 'hot', limit = 20, t } = req.query;
+  
+  // Validate required parameters
+  if (!subreddit) {
+    return res.status(400).json({ error: 'Missing required query parameter: subreddit' });
+  }
+  
+  // Validate sort parameter
+  const validSorts = ['hot', 'top', 'new', 'rising'];
+  if (!validSorts.includes(sort)) {
+    return res.status(400).json({ error: 'Invalid sort parameter' });
+  }
+  
+  // Build URL with query parameters
+  let url = `https://www.reddit.com/r/${subreddit}/${sort}.json?limit=${limit}`;
+  if (t && sort === 'top') {
+    url += `&t=${t}`;
+  }
+  
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'web:trading-app:v1.0.0 (for educational/research purposes)'
+      }
+    });
+    
+    if (!response.ok) {
+      return res.status(response.status).json({ 
+        error: `Reddit API returned status ${response.status}` 
+      });
+    }
+    
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error(`Error fetching Reddit data for r/${subreddit}:`, error);
+    res.status(500).json({ 
+      error: error.message || 'Failed to fetch Reddit data' 
+    });
+  }
+});
+
+// Proxy endpoint for Twitter API (placeholder for future implementation)
+app.get('/api/twitter', throttleMiddleware, async (req, res) => {
+  // Twitter API integration would go here
+  // For now, return a message indicating it's not implemented
+  res.status(501).json({ 
+    error: 'Twitter API proxy not yet implemented. Using mock data in client.' 
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`✅ Proxy server running on http://localhost:${PORT}`);
   console.log(`📊 Endpoints:`);
   console.log(`   - GET /health`);
   console.log(`   - GET /api/chart/:symbol?period1=X&period2=Y&interval=Z`);
   console.log(`   - GET /api/quote/:symbol?interval=X&range=Y`);
+  console.log(`   - GET /api/reddit?subreddit=X&sort=Y&limit=Z`);
+  console.log(`   - GET /api/twitter (not yet implemented)`);
 });
