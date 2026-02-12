@@ -130,14 +130,33 @@ app.get('/api/reddit', throttleMiddleware, async (req, res) => {
     return res.status(400).json({ error: 'Missing required query parameter: subreddit' });
   }
   
+  // Validate subreddit name (alphanumeric and underscores only)
+  if (!/^[a-zA-Z0-9_]+$/.test(subreddit)) {
+    return res.status(400).json({ error: 'Invalid subreddit parameter' });
+  }
+  
   // Validate sort parameter
   const validSorts = ['hot', 'top', 'new', 'rising'];
   if (!validSorts.includes(sort)) {
     return res.status(400).json({ error: 'Invalid sort parameter' });
   }
   
+  // Validate limit parameter (1-100)
+  const limitNum = parseInt(limit, 10);
+  if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+    return res.status(400).json({ error: 'Invalid limit parameter - must be between 1 and 100' });
+  }
+  
+  // Validate time range parameter if provided
+  if (t) {
+    const validTimeRanges = ['hour', 'day', 'week', 'month', 'year', 'all'];
+    if (!validTimeRanges.includes(t)) {
+      return res.status(400).json({ error: 'Invalid time range parameter' });
+    }
+  }
+  
   // Build URL with query parameters
-  let url = `https://www.reddit.com/r/${subreddit}/${sort}.json?limit=${limit}`;
+  let url = `https://www.reddit.com/r/${subreddit}/${sort}.json?limit=${limitNum}`;
   if (t && sort === 'top') {
     url += `&t=${t}`;
   }
