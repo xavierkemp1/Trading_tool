@@ -102,7 +102,7 @@ async function loadSchema(db: Database): Promise<void> {
 /**
  * Save database to localStorage with debouncing
  */
-export async function saveDatabase(): Promise<void> {
+export function saveDatabase(): void {
   if (!dbInstance) {
     throw new Error('Database not initialized');
   }
@@ -116,8 +116,12 @@ export async function saveDatabase(): Promise<void> {
   pendingSave = true;
 
   // Set up debounced save
-  saveTimeout = setTimeout(() => {
-    saveDatabaseImmediate();
+  saveTimeout = setTimeout(async () => {
+    try {
+      await saveDatabaseImmediate();
+    } catch (error) {
+      console.error('Debounced database save failed:', error);
+    }
   }, SAVE_DEBOUNCE_MS) as unknown as number;
 }
 

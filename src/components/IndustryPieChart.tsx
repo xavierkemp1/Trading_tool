@@ -129,7 +129,7 @@ export default function IndustryPieChart() {
             verticalAlign="bottom"
             height={36}
             formatter={(value, entry: any) => {
-              // Use entry.value to get the industry name
+              // entry.value contains the industry name due to nameKey="industry" on the Pie component
               const industryName = entry.value;
               const item = industryData.find(d => d.industry === industryName);
               return (
