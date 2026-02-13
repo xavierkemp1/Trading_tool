@@ -185,6 +185,45 @@ app.get('/api/reddit', throttleMiddleware, async (req, res) => {
   }
 });
 
+// Proxy endpoint for individual Reddit posts
+app.get('/api/reddit/post', throttleMiddleware, async (req, res) => {
+  const { subreddit, postId } = req.query;
+  
+  if (!subreddit || !postId) {
+    return res.status(400).json({ error: 'Missing required parameters' });
+  }
+  
+  // Validate subreddit and postId format
+  if (!/^[a-zA-Z0-9_]+$/.test(subreddit)) {
+    return res.status(400).json({ error: 'Invalid subreddit parameter' });
+  }
+  
+  if (!/^[a-zA-Z0-9_]+$/.test(postId)) {
+    return res.status(400).json({ error: 'Invalid postId parameter' });
+  }
+  
+  const url = `https://www.reddit.com/r/${subreddit}/comments/${postId}.json`;
+  
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'web:trading-app:v1.0.0 (for educational/research purposes)'
+      }
+    });
+    
+    if (!response.ok) {
+      return res.status(response.status).json({ 
+        error: `Reddit API returned status ${response.status}` 
+      });
+    }
+    
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Proxy endpoint for Twitter API (placeholder for future implementation)
 app.get('/api/twitter', throttleMiddleware, async (req, res) => {
   // Twitter API integration would go here
@@ -201,5 +240,6 @@ app.listen(PORT, () => {
   console.log(`   - GET /api/chart/:symbol?period1=X&period2=Y&interval=Z`);
   console.log(`   - GET /api/quote/:symbol?interval=X&range=Y`);
   console.log(`   - GET /api/reddit?subreddit=X&sort=Y&limit=Z`);
+  console.log(`   - GET /api/reddit/post?subreddit=X&postId=Y`);
   console.log(`   - GET /api/twitter (not yet implemented)`);
 });

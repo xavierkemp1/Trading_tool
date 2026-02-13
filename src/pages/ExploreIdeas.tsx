@@ -52,6 +52,19 @@ export default function ExploreIdeas() {
   const [postAnalysisError, setPostAnalysisError] = useState<string | null>(null);
   const [selectedPostForAnalysis, setSelectedPostForAnalysis] = useState<RedditDeepDive | null>(null);
 
+  // Batch analysis state
+  const [batchAnalysisLoading, setBatchAnalysisLoading] = useState(false);
+  const [batchAnalysisResult, setBatchAnalysisResult] = useState<{
+    summary: string;
+    suggestedStocks: Array<{
+      symbol: string;
+      confidence: 'High' | 'Medium' | 'Low';
+      reasoning: string;
+    }>;
+    emergingThemes: string[];
+  } | null>(null);
+  const [batchAnalysisError, setBatchAnalysisError] = useState<string | null>(null);
+
   const loadWatchlist = useCallback(async () => {
     setLoading(true);
     try {
@@ -320,6 +333,45 @@ export default function ExploreIdeas() {
     setSelectedPostForAnalysis(null);
   };
 
+  const handleBatchAnalysis = async () => {
+    setBatchAnalysisLoading(true);
+    setBatchAnalysisError(null);
+    setBatchAnalysisResult(null);
+
+    try {
+      const { analyzeRedditBatch } = await import('../lib/redditService');
+      const result = await analyzeRedditBatch(redditSentiment, redditDeepDives);
+      setBatchAnalysisResult(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to analyze Reddit data';
+      setBatchAnalysisError(message);
+      console.error('Batch analysis failed:', err);
+    } finally {
+      setBatchAnalysisLoading(false);
+    }
+  };
+
+  const handleAddToWatchlist = async (symbol: string) => {
+    try {
+      const { addToWatchlist } = await import('../lib/dbOperations');
+      addToWatchlist({
+        symbol,
+        thesis_tag: 'Other',
+        notes: 'Added from Reddit batch analysis - AI suggested'
+      });
+      showSaveMessage(`${symbol} added to watchlist`);
+      loadWatchlist();
+    } catch (err) {
+      console.error('Failed to add to watchlist:', err);
+      showSaveMessage('Failed to add to watchlist', true);
+    }
+  };
+
+  const showSaveMessage = (message: string, isError = false) => {
+    // You might want to add a toast notification here
+    console.log(isError ? `Error: ${message}` : message);
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader title="Explore / New Ideas" subtitle="Shortlist only. Cap candidates to 50." />
@@ -409,29 +461,110 @@ export default function ExploreIdeas() {
         ) : redditSentiment.length === 0 ? (
           <div className="mt-4 text-sm text-slate-400">No mentions found in recent posts.</div>
         ) : (
-          <div className="mt-4 grid gap-3">
-            {redditSentiment.map((cluster) => (
-              <div
-                key={cluster.symbol}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/60 p-3 cursor-pointer hover:bg-slate-800/50"
-                onClick={() => handleIdeaReview(cluster.symbol)}
+          <>
+            <div className="mt-4 grid gap-3">
+              {redditSentiment.map((cluster) => (
+                <div
+                  key={cluster.symbol}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/60 p-3 cursor-pointer hover:bg-slate-800/50"
+                  onClick={() => handleIdeaReview(cluster.symbol)}
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-100">{cluster.symbol}</p>
+                    <p className="text-xs text-slate-400">
+                      Mentions {cluster.mentions} ({cluster.change}) · Sentiment {cluster.sentiment}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {cluster.themes.map((theme) => (
+                      <span key={theme} className="rounded-full border border-slate-800 px-2 py-1 text-xs text-slate-300">
+                        {theme}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Batch AI Analysis Section */}
+            <div className="mt-6">
+              <button
+                onClick={handleBatchAnalysis}
+                disabled={batchAnalysisLoading || !getSettings().openai.enabled}
+                className="w-full rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 px-4 py-3 font-medium text-white hover:from-cyan-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <div>
-                  <p className="text-sm font-semibold text-slate-100">{cluster.symbol}</p>
-                  <p className="text-xs text-slate-400">
-                    Mentions {cluster.mentions} ({cluster.change}) · Sentiment {cluster.sentiment}
-                  </p>
+                {batchAnalysisLoading ? '🤖 Analyzing...' : '🤖 AI Market Analysis & Stock Suggestions'}
+              </button>
+              
+              {!getSettings().openai.enabled && (
+                <p className="mt-2 text-center text-xs text-slate-400">
+                  Enable OpenAI integration in settings to use this feature
+                </p>
+              )}
+
+              {batchAnalysisError && (
+                <div className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+                  {batchAnalysisError}
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {cluster.themes.map((theme) => (
-                    <span key={theme} className="rounded-full border border-slate-800 px-2 py-1 text-xs text-slate-300">
-                      {theme}
-                    </span>
-                  ))}
+              )}
+
+              {batchAnalysisResult && (
+                <div className="mt-4 space-y-4">
+                  {/* Market Summary */}
+                  <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+                    <h3 className="mb-2 text-sm font-semibold text-cyan-400">Market Sentiment Summary</h3>
+                    <p className="text-sm text-slate-300">{batchAnalysisResult.summary}</p>
+                  </div>
+                  
+                  {/* Suggested Stocks */}
+                  {batchAnalysisResult.suggestedStocks.length > 0 && (
+                    <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+                      <h3 className="mb-3 text-sm font-semibold text-cyan-400">AI Suggested Stocks</h3>
+                      <div className="space-y-3">
+                        {batchAnalysisResult.suggestedStocks.map((stock) => (
+                          <div key={stock.symbol} className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="font-semibold text-slate-100">{stock.symbol}</p>
+                                <span className={`rounded-full px-2 py-0.5 text-xs ${
+                                  stock.confidence === 'High' ? 'bg-green-500/20 text-green-300' :
+                                  stock.confidence === 'Medium' ? 'bg-yellow-500/20 text-yellow-300' :
+                                  'bg-slate-500/20 text-slate-300'
+                                }`}>
+                                  {stock.confidence}
+                                </span>
+                              </div>
+                              <p className="text-sm text-slate-400">{stock.reasoning}</p>
+                            </div>
+                            <button
+                              onClick={() => handleAddToWatchlist(stock.symbol)}
+                              className="ml-3 rounded-lg border border-cyan-500/50 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-300 hover:bg-cyan-500/20"
+                            >
+                              Add to Watchlist
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Emerging Themes */}
+                  {batchAnalysisResult.emergingThemes.length > 0 && (
+                    <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+                      <h3 className="mb-3 text-sm font-semibold text-cyan-400">Emerging Themes</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {batchAnalysisResult.emergingThemes.map((theme) => (
+                          <span key={theme} className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-300">
+                            {theme}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
-          </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 

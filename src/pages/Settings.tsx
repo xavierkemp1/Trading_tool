@@ -6,6 +6,7 @@ import type { Settings as SettingsType } from '../lib/settingsService';
 export default function Settings() {
   const [settings, setSettings] = useState<SettingsType>(getSettings());
   const [newTwitterAccount, setNewTwitterAccount] = useState('');
+  const [newSubreddit, setNewSubreddit] = useState('');
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -88,6 +89,94 @@ export default function Settings() {
     showSaveMessage('OpenAI settings updated');
   };
 
+  const handleAddSubreddit = () => {
+    if (!newSubreddit.trim()) return;
+    
+    const cleanSubreddit = newSubreddit.trim().replace(/^r\//, '');
+    
+    if (settings.reddit.sources.includes(cleanSubreddit)) {
+      showSaveMessage('Subreddit already added', true);
+      return;
+    }
+    
+    const updated = {
+      ...settings,
+      reddit: {
+        ...settings.reddit,
+        sources: [...settings.reddit.sources, cleanSubreddit]
+      }
+    };
+    setSettings(updated);
+    updateSettings(updated);
+    setNewSubreddit('');
+    showSaveMessage(`r/${cleanSubreddit} added`);
+  };
+
+  const handleRemoveSubreddit = (subreddit: string) => {
+    const updated = {
+      ...settings,
+      reddit: {
+        ...settings.reddit,
+        sources: settings.reddit.sources.filter(s => s !== subreddit)
+      }
+    };
+    setSettings(updated);
+    updateSettings(updated);
+    showSaveMessage(`r/${subreddit} removed`);
+  };
+
+  const handleCacheHoursChange = (hours: number) => {
+    const updated = {
+      ...settings,
+      reddit: {
+        ...settings.reddit,
+        cacheHours: hours
+      }
+    };
+    setSettings(updated);
+    updateSettings(updated);
+    showSaveMessage('Cache duration updated');
+  };
+
+  const handleMinPostScoreChange = (score: number) => {
+    const updated = {
+      ...settings,
+      reddit: {
+        ...settings.reddit,
+        minPostScore: score
+      }
+    };
+    setSettings(updated);
+    updateSettings(updated);
+    showSaveMessage('Min post score updated');
+  };
+
+  const handleMinMentionsChange = (mentions: number) => {
+    const updated = {
+      ...settings,
+      reddit: {
+        ...settings.reddit,
+        minMentions: mentions
+      }
+    };
+    setSettings(updated);
+    updateSettings(updated);
+    showSaveMessage('Min mentions updated');
+  };
+
+  const handlePostsPerSubredditChange = (posts: number) => {
+    const updated = {
+      ...settings,
+      reddit: {
+        ...settings.reddit,
+        postsPerSubreddit: posts
+      }
+    };
+    setSettings(updated);
+    updateSettings(updated);
+    showSaveMessage('Posts per subreddit updated');
+  };
+
   const showSaveMessage = (message: string, isError = false) => {
     setSaveMessage(isError ? `Error: ${message}` : message);
     setTimeout(() => setSaveMessage(null), 3000);
@@ -134,22 +223,105 @@ export default function Settings() {
           </div>
 
           {settings.reddit.enabled && (
-            <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
-              <p className="text-xs uppercase text-slate-400">Monitored Subreddits</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {settings.reddit.sources.map((subreddit) => (
-                  <span
-                    key={subreddit}
-                    className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300"
+            <>
+              {/* Subreddit Manager */}
+              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+                <p className="text-xs uppercase text-slate-400 mb-3">Manage Subreddits</p>
+                <div className="flex gap-2 mb-3">
+                  <input
+                    type="text"
+                    value={newSubreddit}
+                    onChange={(e) => setNewSubreddit(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddSubreddit()}
+                    placeholder="e.g., SecurityAnalysis or r/investing"
+                    className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                  />
+                  <button
+                    onClick={handleAddSubreddit}
+                    className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-600"
                   >
-                    r/{subreddit}
-                  </span>
-                ))}
+                    Add
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {settings.reddit.sources.map((subreddit) => (
+                    <div
+                      key={subreddit}
+                      className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800/50 px-3 py-1"
+                    >
+                      <span className="text-xs text-slate-300">r/{subreddit}</span>
+                      <button
+                        onClick={() => handleRemoveSubreddit(subreddit)}
+                        className="text-xs text-rose-400 hover:text-rose-300"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <p className="mt-3 text-xs text-slate-400">
-                Cache duration: {settings.reddit.cacheHours} hours
-              </p>
-            </div>
+
+              {/* Cache Duration */}
+              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs uppercase text-slate-400">Cache Duration</p>
+                  <p className="text-sm font-medium text-slate-100">{settings.reddit.cacheHours} hours</p>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="24"
+                  value={settings.reddit.cacheHours}
+                  onChange={(e) => handleCacheHoursChange(Number(e.target.value))}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-slate-500 mt-1">
+                  <span>1h</span>
+                  <span>24h</span>
+                </div>
+              </div>
+
+              {/* Filter Controls */}
+              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+                <p className="text-xs uppercase text-slate-400 mb-3">Filters</p>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm text-slate-300">Min Post Score</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="1000"
+                      value={settings.reddit.minPostScore}
+                      onChange={(e) => handleMinPostScoreChange(Number(e.target.value))}
+                      className="w-20 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm text-slate-300">Min Mentions</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="50"
+                      value={settings.reddit.minMentions}
+                      onChange={(e) => handleMinMentionsChange(Number(e.target.value))}
+                      className="w-20 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm text-slate-300">Posts Per Subreddit</label>
+                    <select
+                      value={settings.reddit.postsPerSubreddit}
+                      onChange={(e) => handlePostsPerSubredditChange(Number(e.target.value))}
+                      className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
+                    >
+                      <option value="20">20</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </>
           )}
 
           <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">

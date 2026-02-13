@@ -15,6 +15,12 @@ export interface Settings {
     enabled: boolean;
     sources: string[];
     cacheHours: number;
+    minPostScore: number;
+    minMentions: number;
+    postsPerSubreddit: number;
+    customPositiveKeywords: string[];
+    customNegativeKeywords: string[];
+    customThemes: Record<string, string[]>;
   };
   twitter: {
     enabled: boolean;

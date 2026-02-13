@@ -470,3 +470,52 @@ Provide a comprehensive analysis including:
   
   return outputMd;
 }
+
+/**
+ * Generic OpenAI analysis function
+ */
+export async function analyzeWithOpenAI(prompt: string): Promise<string> {
+  const settings = getSettings();
+  
+  if (!settings.openai.enabled) {
+    throw new Error('OpenAI integration is disabled in settings');
+  }
+  
+  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OpenAI API key not configured. Set VITE_OPENAI_API_KEY in your environment.');
+  }
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: settings.openai.model,
+      messages: [
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 2000
+    })
+  });
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+    throw new Error(`OpenAI API error: ${error.error?.message || response.statusText}`);
+  }
+  
+  const result = await response.json();
+  const outputMd = result.choices?.[0]?.message?.content || '';
+  
+  if (!outputMd) {
+    throw new Error('Empty response from OpenAI API');
+  }
+  
+  return outputMd;
+}
