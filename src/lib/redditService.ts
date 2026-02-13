@@ -454,7 +454,7 @@ export function getLastDeepDiveFetchTimestamp(): number | null {
 export async function fetchRedditPostContent(postUrl: string): Promise<string> {
   try {
     // Reddit JSON API: append .json to the URL
-    const jsonUrl = postUrl.replace('https://www.reddit.com', 'https://www.reddit.com') + '.json';
+    const jsonUrl = postUrl + '.json';
     
     const response = await fetch(jsonUrl, {
       headers: {
