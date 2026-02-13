@@ -453,35 +453,35 @@ export function getLastDeepDiveFetchTimestamp(): number | null {
  */
 export async function fetchRedditPostContent(postUrl: string): Promise<string> {
   try {
-    // Extract post ID from URL (format: /r/subreddit/comments/POST_ID/...)
-    const urlParts = postUrl.split('/');
-    const commentsIndex = urlParts.indexOf('comments');
-    if (commentsIndex === -1 || commentsIndex + 1 >= urlParts.length) {
-      throw new Error('Invalid Reddit post URL');
-    }
+    // Reddit JSON API: append .json to the URL
+    const jsonUrl = postUrl.replace('https://www.reddit.com', 'https://www.reddit.com') + '.json';
     
-    const postId = urlParts[commentsIndex + 1];
-    const subreddit = urlParts[commentsIndex - 1];
+    const response = await fetch(jsonUrl, {
+      headers: {
+        'User-Agent': 'web:trading-app:v1.0.0 (for educational/research purposes)'
+      }
+    });
     
-    // Fetch post data via proxy
-    const proxyUrl = getProxyUrl();
-    const url = `${proxyUrl}/api/reddit?subreddit=${subreddit}&sort=hot&limit=100`;
-    
-    const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Failed to fetch post: ${response.status}`);
     }
     
-    const data: RedditListing = await response.json();
+    const data = await response.json();
     
-    // Find the specific post
-    const post = data.data.children.find(p => p.data.id === postId);
+    // Reddit returns an array with [post_listing, comments_listing]
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      throw new Error('Invalid response from Reddit API');
+    }
+    
+    const postListing = data[0];
+    const post = postListing?.data?.children?.[0]?.data;
+    
     if (!post) {
       throw new Error('Post not found');
     }
     
     // Return full post content
-    return `Title: ${post.data.title}\n\nAuthor: u/${post.data.author || 'deleted'}\n\nContent:\n${post.data.selftext || '(No text content)'}`;
+    return `Title: ${post.title}\n\nAuthor: u/${post.author || 'deleted'}\n\nContent:\n${post.selftext || '(No text content)'}`;
   } catch (err) {
     console.error('Error fetching Reddit post content:', err);
     throw new Error('Failed to fetch post content for analysis');
