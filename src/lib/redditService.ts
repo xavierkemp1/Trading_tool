@@ -1,4 +1,5 @@
 import { getSettings } from './settingsService';
+import { getDatabase, saveDatabase } from './database';
 
 export interface RedditSentiment {
   symbol: string;
@@ -497,7 +498,6 @@ export async function fetchRedditPostContent(postUrl: string): Promise<string> {
  */
 export function storeRedditHistory(sentiments: RedditSentiment[]): void {
   try {
-    const { getDatabase } = require('./database');
     const db = getDatabase();
     const timestamp = Date.now();
     
@@ -509,7 +509,6 @@ export function storeRedditHistory(sentiments: RedditSentiment[]): void {
     }
     
     // Save database after batch insert
-    const { saveDatabase } = require('./database');
     saveDatabase();
   } catch (err) {
     console.error('Failed to store Reddit history:', err);
@@ -521,7 +520,6 @@ export function storeRedditHistory(sentiments: RedditSentiment[]): void {
  */
 export function getHistoricalMentions(symbol: string, daysAgo: number = 7): number {
   try {
-    const { getDatabase } = require('./database');
     const db = getDatabase();
     const cutoff = Date.now() - (daysAgo * 24 * 60 * 60 * 1000);
     

@@ -353,12 +353,11 @@ export default function ExploreIdeas() {
 
   const handleAddToWatchlist = async (symbol: string) => {
     try {
-      const { addToWatchlist } = await import('../lib/db');
+      const { addToWatchlist } = await import('../lib/dbOperations');
       addToWatchlist({
         symbol,
-        added_at: new Date().toISOString(),
-        thesis_tag: 'AI Suggested',
-        notes: 'Added from Reddit batch analysis'
+        thesis_tag: 'Other',
+        notes: 'Added from Reddit batch analysis - AI suggested'
       });
       showSaveMessage(`${symbol} added to watchlist`);
       loadWatchlist();
