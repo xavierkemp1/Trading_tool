@@ -181,50 +181,68 @@ export async function fetchRedditSentiment(symbols: string[]): Promise<RedditSen
     symbolPosts.set(s, []);
   });
   
-  // Fetch from each subreddit
+  // Fetch from each subreddit with retry logic
   for (const subreddit of SUBREDDITS) {
-    try {
-      const proxyUrl = getProxyUrl();
-      const url = `${proxyUrl}/api/reddit?subreddit=${subreddit}&sort=top&limit=100&t=week`;
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        console.warn(`Failed to fetch from r/${subreddit}: ${response.status}`);
+    let retries = 0;
+    const maxRetries = 2;
+    let success = false;
+    
+    while (retries <= maxRetries && !success) {
+      try {
+        const proxyUrl = getProxyUrl();
+        const url = `${proxyUrl}/api/reddit?subreddit=${subreddit}&sort=top&limit=100&t=week`;
+        const response = await fetch(url);
         
-        // Rate limited - wait and continue
-        if (response.status === 429) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-        continue;
-      }
-      
-      const data: RedditListing = await response.json();
-      
-      for (const post of data.data.children) {
-        const title = post.data.title;
-        const text = post.data.selftext || '';
-        const fullText = `${title} ${text}`;
-        
-        const tickers = extractTickers(fullText, targetSymbols);
-        
-        for (const ticker of tickers) {
-          mentionCounts.set(ticker, (mentionCounts.get(ticker) || 0) + 1);
+        if (!response.ok) {
+          console.warn(`Failed to fetch from r/${subreddit}: ${response.status}`);
           
-          const sentiment = analyzeSentiment(title, text, post.data.score);
-          const scores = sentimentScores.get(ticker)!;
-          scores[sentiment.toLowerCase() as keyof typeof scores]++;
+          // Rate limited - use exponential backoff
+          if (response.status === 429 || response.status === 403) {
+            const backoffTime = Math.min(5000 * Math.pow(2, retries), 15000);
+            console.log(`Rate limited, waiting ${backoffTime}ms before retry...`);
+            await new Promise(resolve => setTimeout(resolve, backoffTime));
+            retries++;
+            continue;
+          }
           
-          const posts = symbolPosts.get(ticker)!;
-          posts.push({ title, text });
+          // Other errors - skip this subreddit
+          break;
+        }
+        
+        const data: RedditListing = await response.json();
+        
+        for (const post of data.data.children) {
+          const title = post.data.title;
+          const text = post.data.selftext || '';
+          const fullText = `${title} ${text}`;
+          
+          const tickers = extractTickers(fullText, targetSymbols);
+          
+          for (const ticker of tickers) {
+            mentionCounts.set(ticker, (mentionCounts.get(ticker) || 0) + 1);
+            
+            const sentiment = analyzeSentiment(title, text, post.data.score);
+            const scores = sentimentScores.get(ticker)!;
+            scores[sentiment.toLowerCase() as keyof typeof scores]++;
+            
+            const posts = symbolPosts.get(ticker)!;
+            posts.push({ title, text });
+          }
+        }
+        
+        success = true;
+        
+      } catch (err) {
+        console.error(`Error fetching from r/${subreddit}:`, err);
+        retries++;
+        if (retries <= maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 2000 * retries));
         }
       }
-      
-      // Be nice to Reddit's API
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-    } catch (err) {
-      console.error(`Error fetching from r/${subreddit}:`, err);
     }
+    
+    // Longer delay between subreddits to avoid rate limits (increased from 1s to 2s)
+    await new Promise(resolve => setTimeout(resolve, 2000));
   }
   
   // Build sentiment results
@@ -322,70 +340,88 @@ export async function fetchRedditDeepDives(maxPosts: number = 10): Promise<Reddi
   
   const deepDives: RedditDeepDive[] = [];
   
-  // Fetch from each subreddit
+  // Fetch from each subreddit with retry logic
   for (const subreddit of DEEP_DIVE_SUBREDDITS) {
-    try {
-      const proxyUrl = getProxyUrl();
-      const url = `${proxyUrl}/api/reddit?subreddit=${subreddit}&sort=hot&limit=20`;
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        console.warn(`Failed to fetch from r/${subreddit}: ${response.status}`);
+    let retries = 0;
+    const maxRetries = 2;
+    let success = false;
+    
+    while (retries <= maxRetries && !success) {
+      try {
+        const proxyUrl = getProxyUrl();
+        const url = `${proxyUrl}/api/reddit?subreddit=${subreddit}&sort=hot&limit=20`;
+        const response = await fetch(url);
         
-        // Rate limited - wait and continue
-        if (response.status === 429) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-        continue;
-      }
-      
-      const data: RedditListing = await response.json();
-      
-      for (const post of data.data.children) {
-        const title = post.data.title.toLowerCase();
-        const selftext = post.data.selftext.toLowerCase();
-        
-        // Filter for stock analysis posts (DD = Due Diligence, thesis, analysis, etc.)
-        const isStockAnalysis = 
-          title.includes('dd') || 
-          title.includes('due diligence') ||
-          title.includes('thesis') ||
-          title.includes('analysis') ||
-          title.includes('deep dive') ||
-          selftext.includes('bull case') ||
-          selftext.includes('bear case') ||
-          (post.data.selftext.length > 500 && post.data.score > 50); // Long posts with good engagement
-        
-        if (isStockAnalysis) {
-          // Create preview (first 200 chars of content)
-          let preview = post.data.selftext.substring(0, 200);
-          if (post.data.selftext.length > 200) {
-            preview += '...';
-          }
-          if (!preview) {
-            preview = 'Click to read full analysis on Reddit';
+        if (!response.ok) {
+          console.warn(`Failed to fetch from r/${subreddit}: ${response.status}`);
+          
+          // Rate limited - use exponential backoff
+          if (response.status === 429 || response.status === 403) {
+            const backoffTime = Math.min(5000 * Math.pow(2, retries), 15000);
+            console.log(`Rate limited, waiting ${backoffTime}ms before retry...`);
+            await new Promise(resolve => setTimeout(resolve, backoffTime));
+            retries++;
+            continue;
           }
           
-          deepDives.push({
-            id: `${subreddit}_${post.data.id || post.data.created_utc}`,
-            title: post.data.title,
-            author: `u/${post.data.author || 'deleted'}`,
-            subreddit: `r/${subreddit}`,
-            upvotes: post.data.score,
-            comments: post.data.num_comments,
-            preview,
-            url: `https://www.reddit.com/r/${subreddit}/comments/${post.data.id || ''}`,
-            created: post.data.created_utc * 1000 // Convert to milliseconds
-          });
+          // Other errors - skip this subreddit
+          break;
+        }
+        
+        const data: RedditListing = await response.json();
+        
+        for (const post of data.data.children) {
+          const title = post.data.title.toLowerCase();
+          const selftext = post.data.selftext.toLowerCase();
+          
+          // Filter for stock analysis posts (DD = Due Diligence, thesis, analysis, etc.)
+          const isStockAnalysis = 
+            title.includes('dd') || 
+            title.includes('due diligence') ||
+            title.includes('thesis') ||
+            title.includes('analysis') ||
+            title.includes('deep dive') ||
+            selftext.includes('bull case') ||
+            selftext.includes('bear case') ||
+            (post.data.selftext.length > 500 && post.data.score > 50); // Long posts with good engagement
+          
+          if (isStockAnalysis) {
+            // Create preview (first 200 chars of content)
+            let preview = post.data.selftext.substring(0, 200);
+            if (post.data.selftext.length > 200) {
+              preview += '...';
+            }
+            if (!preview) {
+              preview = 'Click to read full analysis on Reddit';
+            }
+            
+            deepDives.push({
+              id: `${subreddit}_${post.data.id || post.data.created_utc}`,
+              title: post.data.title,
+              author: `u/${post.data.author || 'deleted'}`,
+              subreddit: `r/${subreddit}`,
+              upvotes: post.data.score,
+              comments: post.data.num_comments,
+              preview,
+              url: `https://www.reddit.com/r/${subreddit}/comments/${post.data.id || ''}`,
+              created: post.data.created_utc * 1000 // Convert to milliseconds
+            });
+          }
+        }
+        
+        success = true;
+        
+      } catch (err) {
+        console.error(`Error fetching from r/${subreddit}:`, err);
+        retries++;
+        if (retries <= maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 2000 * retries));
         }
       }
-      
-      // Be nice to Reddit's API
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-    } catch (err) {
-      console.error(`Error fetching from r/${subreddit}:`, err);
     }
+    
+    // Longer delay between subreddits to avoid rate limits (increased from 1s to 2s)
+    await new Promise(resolve => setTimeout(resolve, 2000));
   }
   
   // Sort by upvotes (most popular first)
@@ -409,5 +445,45 @@ export function getLastDeepDiveFetchTimestamp(): number | null {
     return data.timestamp;
   } catch (err) {
     return null;
+  }
+}
+
+/**
+ * Fetch full Reddit post content for AI analysis
+ */
+export async function fetchRedditPostContent(postUrl: string): Promise<string> {
+  try {
+    // Reddit JSON API: append .json to the URL
+    const jsonUrl = postUrl + '.json';
+    
+    const response = await fetch(jsonUrl, {
+      headers: {
+        'User-Agent': 'web:trading-app:v1.0.0 (for educational/research purposes)'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch post: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    // Reddit returns an array with [post_listing, comments_listing]
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      throw new Error('Invalid response from Reddit API');
+    }
+    
+    const postListing = data[0];
+    const post = postListing?.data?.children?.[0]?.data;
+    
+    if (!post) {
+      throw new Error('Post not found');
+    }
+    
+    // Return full post content
+    return `Title: ${post.title}\n\nAuthor: u/${post.author || 'deleted'}\n\nContent:\n${post.selftext || '(No text content)'}`;
+  } catch (err) {
+    console.error('Error fetching Reddit post content:', err);
+    throw new Error('Failed to fetch post content for analysis');
   }
 }

@@ -366,3 +366,107 @@ Provide a detailed analysis including:
   
   return outputMd;
 }
+
+/**
+ * Analyze Reddit post content using AI
+ */
+export async function analyzeRedditPost(
+  postTitle: string,
+  postContent: string,
+  postAuthor: string,
+  postSubreddit: string
+): Promise<string> {
+  const settings = getSettings();
+  
+  if (!settings.openai.enabled) {
+    throw new Error('OpenAI integration is disabled in settings');
+  }
+  
+  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OpenAI API key not configured. Set VITE_OPENAI_API_KEY in your environment.');
+  }
+
+  const systemPrompt = `You are a financial analyst AI assistant specialized in analyzing Reddit stock discussion posts and due diligence (DD) reports.
+Your task is to:
+1. Critically analyze the investment thesis presented
+2. Evaluate the quality of research and arguments
+3. Identify potential biases or gaps in analysis
+4. Extract key data points and claims
+5. Assess the overall credibility and strength of the argument
+6. Highlight both bullish and bearish perspectives
+
+Be objective and critical. Point out both strengths and weaknesses in the analysis.`;
+
+  const userPrompt = `Please analyze this Reddit post from ${postSubreddit} by ${postAuthor}:
+
+Title: ${postTitle}
+
+Content:
+${postContent}
+
+Provide a comprehensive analysis including:
+- Summary of the main investment thesis
+- Quality assessment of the research/analysis
+- Key claims and supporting evidence
+- Potential biases or red flags
+- Missing information or gaps in analysis
+- Counter-arguments or risks not mentioned
+- Overall credibility score (1-10)
+- Your conclusion: Is this analysis worth considering?`;
+
+  // Call OpenAI API
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: settings.openai.model,
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt
+        },
+        {
+          role: 'user',
+          content: userPrompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 2500
+    })
+  });
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+    throw new Error(`OpenAI API error: ${error.error?.message || response.statusText}`);
+  }
+  
+  const result = await response.json();
+  const outputMd = result.choices?.[0]?.message?.content || '';
+  
+  if (!outputMd) {
+    throw new Error('Empty response from OpenAI API');
+  }
+
+  // Store in database
+  const inputJson = JSON.stringify({
+    postTitle,
+    postAuthor,
+    postSubreddit,
+    contentLength: postContent.length,
+    timestamp: new Date().toISOString()
+  }, null, 2);
+
+  addReview({
+    created_at: new Date().toISOString(),
+    scope: 'reddit_analysis',
+    symbol: undefined,
+    input_json: inputJson,
+    output_md: outputMd
+  });
+  
+  return outputMd;
+}

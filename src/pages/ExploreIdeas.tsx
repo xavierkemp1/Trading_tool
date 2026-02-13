@@ -3,10 +3,10 @@ import SectionHeader from '../components/SectionHeader';
 import WatchlistManager from '../components/WatchlistManager';
 import { getAllWatchlist, getLatestPrice, getSymbol } from '../lib/db';
 import { calculateIndicators } from '../lib/dataService';
-import { fetchRedditSentiment, fetchRedditDeepDives, getLastDeepDiveFetchTimestamp, type RedditSentiment, type RedditDeepDive } from '../lib/redditService';
+import { fetchRedditSentiment, fetchRedditDeepDives, getLastDeepDiveFetchTimestamp, fetchRedditPostContent, type RedditSentiment, type RedditDeepDive } from '../lib/redditService';
 import { fetchTwitterFeed, getLastFetchTimestamp, type Tweet } from '../lib/twitterService';
 import { isRedditEnabled, isTwitterEnabled, getSettings } from '../lib/settingsService';
-import { analyzeFileContent } from '../lib/openaiService';
+import { analyzeFileContent, analyzeRedditPost } from '../lib/openaiService';
 import type { WatchlistItem } from '../lib/types';
 
 const quantFilters = [
@@ -45,6 +45,12 @@ export default function ExploreIdeas() {
   const [twitterLoading, setTwitterLoading] = useState(false);
   const [twitterError, setTwitterError] = useState<string | null>(null);
   const [twitterLastFetch, setTwitterLastFetch] = useState<number | null>(null);
+
+  // Reddit post AI analysis state
+  const [analyzingPost, setAnalyzingPost] = useState<string | null>(null);
+  const [postAnalysisResult, setPostAnalysisResult] = useState<string | null>(null);
+  const [postAnalysisError, setPostAnalysisError] = useState<string | null>(null);
+  const [selectedPostForAnalysis, setSelectedPostForAnalysis] = useState<RedditDeepDive | null>(null);
 
   const loadWatchlist = useCallback(async () => {
     setLoading(true);
@@ -280,6 +286,40 @@ export default function ExploreIdeas() {
     });
   };
 
+  const handleAnalyzeRedditPost = async (post: RedditDeepDive) => {
+    setAnalyzingPost(post.id);
+    setPostAnalysisError(null);
+    setPostAnalysisResult(null);
+    setSelectedPostForAnalysis(post);
+
+    try {
+      // Fetch full post content
+      const fullContent = await fetchRedditPostContent(post.url);
+      
+      // Analyze with AI
+      const result = await analyzeRedditPost(
+        post.title,
+        fullContent,
+        post.author,
+        post.subreddit
+      );
+      
+      setPostAnalysisResult(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to analyze post';
+      setPostAnalysisError(message);
+      console.error('Reddit post analysis failed:', err);
+    } finally {
+      setAnalyzingPost(null);
+    }
+  };
+
+  const handleClosePostAnalysis = () => {
+    setPostAnalysisResult(null);
+    setPostAnalysisError(null);
+    setSelectedPostForAnalysis(null);
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader title="Explore / New Ideas" subtitle="Shortlist only. Cap candidates to 50." />
@@ -439,33 +479,47 @@ export default function ExploreIdeas() {
                 </div>
               ) : (
                 redditDeepDives.map((post) => (
-                  <a
+                  <div
                     key={post.id}
-                    href={post.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block rounded-lg border border-slate-800 bg-slate-900/60 p-3 transition-colors hover:bg-slate-800/50"
+                    className="rounded-lg border border-slate-800 bg-slate-900/60 p-3"
                   >
-                    <div className="mb-2 flex items-start justify-between gap-2">
-                      <h4 className="text-sm font-medium text-slate-100 line-clamp-2">
-                        {post.title}
-                      </h4>
-                    </div>
-                    <p className="mb-2 text-xs text-slate-400 line-clamp-2">
-                      {post.preview}
-                    </p>
-                    <div className="flex items-center gap-3 text-xs text-slate-500">
-                      <span>{post.author}</span>
-                      <span>•</span>
-                      <span>{post.subreddit}</span>
-                      <span>•</span>
-                      <span>↑ {post.upvotes}</span>
-                      <span>•</span>
-                      <span>💬 {post.comments}</span>
-                      <span>•</span>
-                      <span>{formatRelativeTime(post.created)}</span>
-                    </div>
-                  </a>
+                    <a
+                      href={post.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block transition-colors hover:bg-slate-800/50"
+                    >
+                      <div className="mb-2 flex items-start justify-between gap-2">
+                        <h4 className="text-sm font-medium text-slate-100 line-clamp-2">
+                          {post.title}
+                        </h4>
+                      </div>
+                      <p className="mb-2 text-xs text-slate-400 line-clamp-2">
+                        {post.preview}
+                      </p>
+                      <div className="flex items-center gap-3 text-xs text-slate-500">
+                        <span>{post.author}</span>
+                        <span>•</span>
+                        <span>{post.subreddit}</span>
+                        <span>•</span>
+                        <span>↑ {post.upvotes}</span>
+                        <span>•</span>
+                        <span>💬 {post.comments}</span>
+                        <span>•</span>
+                        <span>{formatRelativeTime(post.created)}</span>
+                      </div>
+                    </a>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleAnalyzeRedditPost(post);
+                      }}
+                      disabled={analyzingPost === post.id}
+                      className="mt-3 w-full rounded-lg border border-cyan-500/50 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-300 hover:bg-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {analyzingPost === post.id ? 'Analyzing...' : '🤖 Analyze with AI'}
+                    </button>
+                  </div>
                 ))
               )}
             </div>
@@ -729,6 +783,53 @@ export default function ExploreIdeas() {
           )}
         </div>
       </div>
+      
+      {/* AI Analysis Modal */}
+      {(postAnalysisResult || postAnalysisError) && selectedPostForAnalysis && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="max-w-4xl w-full max-h-[90vh] overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 p-4">
+              <div className="flex-1 pr-4">
+                <h3 className="text-lg font-semibold text-slate-100">AI Analysis</h3>
+                <p className="mt-1 text-xs text-slate-400 line-clamp-1">
+                  {selectedPostForAnalysis.title}
+                </p>
+              </div>
+              <button
+                onClick={handleClosePostAnalysis}
+                className="text-slate-400 hover:text-slate-200"
+              >
+                <svg
+                  className="h-6 w-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div className="overflow-y-auto p-6" style={{ maxHeight: 'calc(90vh - 80px)' }}>
+              {postAnalysisError ? (
+                <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
+                  {postAnalysisError}
+                </div>
+              ) : (
+                <div className="prose prose-invert prose-sm max-w-none">
+                  <div className="whitespace-pre-wrap text-sm text-slate-300">
+                    {postAnalysisResult}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
