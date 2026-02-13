@@ -12,7 +12,13 @@
   "reddit": {
     "enabled": false,
     "sources": ["wallstreetbets", "stocks", "options"],
-    "cacheHours": 6
+    "cacheHours": 6,
+    "minPostScore": 10,
+    "minMentions": 3,
+    "postsPerSubreddit": 100,
+    "customPositiveKeywords": [],
+    "customNegativeKeywords": [],
+    "customThemes": {}
   },
   "twitter": {
     "enabled": false,

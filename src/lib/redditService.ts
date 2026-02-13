@@ -171,12 +171,9 @@ export async function fetchRedditSentiment(symbols: string[]): Promise<RedditSen
   const sentimentScores = new Map<string, { positive: number; negative: number; mixed: number; neutral: number }>();
   const symbolPosts = new Map<string, { title: string; text: string }[]>();
   
-  // Track previous mention counts for change calculation
-  // Note: Using simulated baseline for demo purposes. In production, store actual historical data.
-  const previousCounts = new Map<string, number>();
+  // Initialize counters
   symbols.forEach(s => {
     mentionCounts.set(s, 0);
-    previousCounts.set(s, Math.floor(Math.random() * 20)); // Simulated baseline
     sentimentScores.set(s, { positive: 0, negative: 0, mixed: 0, neutral: 0 });
     symbolPosts.set(s, []);
   });
@@ -248,8 +245,10 @@ export async function fetchRedditSentiment(symbols: string[]): Promise<RedditSen
   // Build sentiment results
   const sentiments: RedditSentiment[] = symbols.map(symbol => {
     const mentions = mentionCounts.get(symbol) || 0;
-    const previous = previousCounts.get(symbol) || 0;
-    const changeValue = previous > 0 ? ((mentions - previous) / previous) * 100 : 0;
+    
+    // Get historical average for comparison
+    const historicalAvg = getHistoricalMentions(symbol, 7);
+    const changeValue = historicalAvg > 0 ? ((mentions - historicalAvg) / historicalAvg) * 100 : 0;
     const change = changeValue > 0 ? `+${changeValue.toFixed(0)}%` : `${changeValue.toFixed(0)}%`;
     
     const scores = sentimentScores.get(symbol)!;
@@ -273,6 +272,9 @@ export async function fetchRedditSentiment(symbols: string[]): Promise<RedditSen
       themes
     };
   });
+  
+  // Store historical data
+  storeRedditHistory(sentiments);
   
   // Cache results
   setCachedSentiment(symbols, sentiments);
@@ -453,14 +455,16 @@ export function getLastDeepDiveFetchTimestamp(): number | null {
  */
 export async function fetchRedditPostContent(postUrl: string): Promise<string> {
   try {
-    // Reddit JSON API: append .json to the URL
-    const jsonUrl = postUrl + '.json';
+    const proxyUrl = getProxyUrl();
     
-    const response = await fetch(jsonUrl, {
-      headers: {
-        'User-Agent': 'web:trading-app:v1.0.0 (for educational/research purposes)'
-      }
-    });
+    // Extract post ID and subreddit from URL
+    const match = postUrl.match(/reddit\.com\/r\/(\w+)\/comments\/(\w+)/);
+    if (!match) throw new Error('Invalid Reddit URL');
+    
+    const [, subreddit, postId] = match;
+    const url = `${proxyUrl}/api/reddit/post?subreddit=${subreddit}&postId=${postId}`;
+    
+    const response = await fetch(url);
     
     if (!response.ok) {
       throw new Error(`Failed to fetch post: ${response.status}`);
@@ -485,5 +489,127 @@ export async function fetchRedditPostContent(postUrl: string): Promise<string> {
   } catch (err) {
     console.error('Error fetching Reddit post content:', err);
     throw new Error('Failed to fetch post content for analysis');
+  }
+}
+
+/**
+ * Store Reddit sentiment history in database
+ */
+export function storeRedditHistory(sentiments: RedditSentiment[]): void {
+  try {
+    const { getDatabase } = require('./database');
+    const db = getDatabase();
+    const timestamp = Date.now();
+    
+    for (const sentiment of sentiments) {
+      db.run(
+        'INSERT INTO reddit_history (symbol, mentions, sentiment, timestamp, subreddits) VALUES (?, ?, ?, ?, ?)',
+        [sentiment.symbol, sentiment.mentions, sentiment.sentiment, timestamp, SUBREDDITS.join(',')]
+      );
+    }
+    
+    // Save database after batch insert
+    const { saveDatabase } = require('./database');
+    saveDatabase();
+  } catch (err) {
+    console.error('Failed to store Reddit history:', err);
+  }
+}
+
+/**
+ * Get historical average mentions for a symbol
+ */
+export function getHistoricalMentions(symbol: string, daysAgo: number = 7): number {
+  try {
+    const { getDatabase } = require('./database');
+    const db = getDatabase();
+    const cutoff = Date.now() - (daysAgo * 24 * 60 * 60 * 1000);
+    
+    const result = db.exec(
+      'SELECT AVG(mentions) as avg_mentions FROM reddit_history WHERE symbol = ? AND timestamp > ?',
+      [symbol, cutoff]
+    );
+    
+    if (result.length > 0 && result[0].values.length > 0) {
+      const avgMentions = result[0].values[0][0];
+      return avgMentions !== null ? Number(avgMentions) : 0;
+    }
+    
+    return 0;
+  } catch (err) {
+    console.error('Failed to get historical mentions:', err);
+    return 0;
+  }
+}
+
+interface BatchAnalysisResult {
+  summary: string;
+  suggestedStocks: Array<{
+    symbol: string;
+    confidence: 'High' | 'Medium' | 'Low';
+    reasoning: string;
+  }>;
+  emergingThemes: string[];
+}
+
+/**
+ * Analyze all Reddit data together with AI for comprehensive market insights
+ */
+export async function analyzeRedditBatch(
+  sentiments: RedditSentiment[],
+  deepDives: RedditDeepDive[]
+): Promise<BatchAnalysisResult> {
+  const settings = getSettings();
+  
+  if (!settings.openai.enabled) {
+    throw new Error('OpenAI integration required for batch analysis');
+  }
+  
+  const { analyzeWithOpenAI } = await import('./openaiService');
+  
+  const prompt = `Analyze these Reddit discussions and provide:
+1. Market sentiment summary (2-3 sentences about overall market mood)
+2. Top 3-5 stock picks with confidence level (High/Medium/Low) and reasoning (1 sentence each)
+3. Emerging themes and catalysts (3-5 keywords/phrases)
+
+Sentiment Data:
+${JSON.stringify(sentiments, null, 2)}
+
+Top Deep Dive Posts:
+${deepDives.slice(0, 5).map(d => `- ${d.title} (${d.upvotes} upvotes, ${d.subreddit})`).join('\n')}
+
+Respond in valid JSON format:
+{
+  "summary": "Market sentiment summary here...",
+  "suggestedStocks": [
+    {"symbol": "TSLA", "confidence": "High", "reasoning": "Strong bullish sentiment..."},
+    ...
+  ],
+  "emergingThemes": ["AI Revolution", "Interest Rate Concerns", ...]
+}`;
+  
+  try {
+    const response = await analyzeWithOpenAI(prompt);
+    
+    // Try to parse JSON from response
+    // OpenAI sometimes wraps JSON in markdown code blocks
+    let jsonText = response.trim();
+    if (jsonText.startsWith('```json')) {
+      jsonText = jsonText.replace(/^```json\n/, '').replace(/\n```$/, '');
+    } else if (jsonText.startsWith('```')) {
+      jsonText = jsonText.replace(/^```\n/, '').replace(/\n```$/, '');
+    }
+    
+    const result = JSON.parse(jsonText);
+    
+    // Validate structure
+    if (!result.summary || !Array.isArray(result.suggestedStocks) || !Array.isArray(result.emergingThemes)) {
+      throw new Error('Invalid response structure from AI');
+    }
+    
+    return result as BatchAnalysisResult;
+  } catch (err) {
+    console.error('Failed to analyze Reddit batch:', err);
+    throw new Error('AI analysis failed. Please try again.');
   }
 }

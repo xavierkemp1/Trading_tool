@@ -78,3 +78,12 @@ CREATE TABLE IF NOT EXISTS ai_reviews (
   input_json TEXT,
   output_md TEXT
 );
+
+CREATE TABLE IF NOT EXISTS reddit_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  symbol TEXT NOT NULL,
+  mentions INTEGER NOT NULL,
+  sentiment TEXT NOT NULL,
+  timestamp INTEGER NOT NULL,
+  subreddits TEXT NOT NULL
+);
