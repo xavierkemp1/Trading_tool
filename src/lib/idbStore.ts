@@ -5,8 +5,8 @@
  * the sql.js database as Uint8Array.
  */
 
-const IDB_NAME = 'trading_tool';
-const IDB_STORE = 'sqlite';
+export const IDB_NAME = 'trading_tool';
+export const IDB_STORE = 'sqlite';
 const IDB_VERSION = 1;
 const DB_KEY = 'db';
 
@@ -60,8 +60,12 @@ export async function getDbBytes(): Promise<Uint8Array | null> {
         const result = request.result;
         if (result instanceof Uint8Array) {
           resolve(result);
+        } else if (result instanceof ArrayBuffer) {
+          // Handle ArrayBuffer format
+          resolve(new Uint8Array(result));
         } else if (result) {
-          // Handle potential ArrayBuffer or other formats
+          // Unexpected format - log warning and attempt conversion
+          console.warn('Unexpected database format in IndexedDB:', typeof result);
           resolve(new Uint8Array(result));
         } else {
           resolve(null);

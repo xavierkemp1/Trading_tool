@@ -1,10 +1,8 @@
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 import schemaSQL from './db/migrations/001_init.sql';
-import { getDbBytes, setDbBytes, clearDbBytes } from './idbStore';
+import { getDbBytes, setDbBytes, clearDbBytes, IDB_NAME, IDB_STORE } from './idbStore';
 
 const DB_KEY = 'trading_app_db'; // Keep for migration from localStorage
-const IDB_NAME = 'trading_tool';
-const IDB_STORE = 'sqlite';
 const DB_VERSION = 1;
 const MAX_FILE_PATH_LENGTH = 100; // Max length to distinguish file paths from SQL content
 const SAVE_DEBOUNCE_MS = 2000; // Debounce database saves by 2 seconds
