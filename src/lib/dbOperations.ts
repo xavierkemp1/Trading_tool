@@ -97,6 +97,15 @@ export interface AIReview {
   output_md: string;
 }
 
+export interface Quote {
+  symbol: string;
+  fetched_at: string;
+  price: number;
+  change?: number;
+  change_pct?: number;
+  source: string;
+}
+
 // ============= HELPER FUNCTIONS =============
 
 function executeQuery<T>(query: string, params: any[] = []): T[] {
@@ -528,4 +537,44 @@ export function updateJournalEntry(id: number, updates: Partial<Omit<JournalEntr
   
   const query = `UPDATE journal_entries SET ${fields.join(', ')} WHERE id = ?`;
   executeInsert(query, values);
+}
+
+// ============= QUOTES =============
+
+export function upsertQuote(quote: Quote): void {
+  const query = `
+    INSERT INTO quotes (symbol, fetched_at, price, change, change_pct, source)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(symbol) DO UPDATE SET
+      fetched_at = excluded.fetched_at,
+      price = excluded.price,
+      change = excluded.change,
+      change_pct = excluded.change_pct,
+      source = excluded.source
+  `;
+  
+  executeInsert(query, [
+    quote.symbol,
+    quote.fetched_at,
+    quote.price,
+    quote.change || null,
+    quote.change_pct || null,
+    quote.source
+  ]);
+}
+
+export function getQuote(symbol: string): Quote | null {
+  const results = executeQuery<Quote>(
+    'SELECT * FROM quotes WHERE symbol = ? LIMIT 1',
+    [symbol]
+  );
+  return results.length > 0 ? results[0] : null;
+}
+
+export function getAllQuotes(): Quote[] {
+  return executeQuery<Quote>('SELECT * FROM quotes ORDER BY symbol');
+}
+
+export function deleteQuote(symbol: string): void {
+  executeInsert('DELETE FROM quotes WHERE symbol = ?', [symbol]);
 }
