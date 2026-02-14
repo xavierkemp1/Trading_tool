@@ -81,16 +81,16 @@ AI-generated analysis and reviews
 ### Database Initialization
 
 ```typescript
-// Initialize database - loads from localStorage if exists, creates new if not
+// Initialize database - loads from IndexedDB if exists, creates new if not
 await initDatabase(): Promise<Database>
 
 // Get database instance (after initialization)
 getDatabase(): Database
 
-// Save current state to localStorage (debounced - waits 2 seconds)
+// Save current state to IndexedDB (debounced - waits 2 seconds)
 saveDatabase(): void
 
-// Save current state to localStorage immediately (no debouncing)
+// Save current state to IndexedDB immediately (no debouncing)
 await saveDatabaseImmediate(): Promise<void>
 
 // Clear database and reset to initial schema
@@ -101,6 +101,9 @@ exportDatabase(): Blob
 
 // Import database from a file
 await importDatabase(file: File): Promise<void>
+
+// Get storage health metrics
+await getStorageHealth(): Promise<StorageHealth>
 ```
 
 ### Symbols Operations
@@ -167,11 +170,13 @@ deleteReview(id: number): void
 
 ## Persistence
 
-The database automatically persists to `localStorage` under the key `trading_app_db`. The data is stored as a base64-encoded binary blob. 
+The database automatically persists to **IndexedDB** under the database name `trading_tool` in the object store `sqlite`. The data is stored as a binary Uint8Array, providing better performance and larger storage capacity compared to the previous localStorage implementation.
 
 **Important:** Database operations automatically trigger a debounced save (2-second delay) to optimize performance. This prevents excessive writes when performing multiple operations in quick succession. For critical operations like database initialization or import, `saveDatabaseImmediate()` is used to ensure data is persisted immediately.
 
-**Performance Optimization:** The debounced save mechanism reduces thousands of potential localStorage writes during bulk operations (e.g., refreshing price data for multiple symbols) down to a single save operation, dramatically improving performance and preventing stack overflow errors.
+**Performance Optimization:** The debounced save mechanism reduces thousands of potential IndexedDB writes during bulk operations (e.g., refreshing price data for multiple symbols) down to a single save operation, dramatically improving performance.
+
+**Migration:** If you have existing data in localStorage (from an older version), it will be automatically migrated to IndexedDB on first load and then removed from localStorage.
 
 ## Error Handling
 
@@ -198,5 +203,6 @@ import type { Position, WatchlistEntry, Price, Fundamentals } from './lib/db';
 - The database must be initialized with `initDatabase()` before any operations
 - All timestamps should be in ISO 8601 format (`new Date().toISOString()`)
 - The database uses sql.js which runs entirely in the browser
-- Data persists across page reloads via localStorage
+- Data persists across page reloads via IndexedDB (50-100MB+ quota)
+- Automatic migration from localStorage on first load with new version
 - For large datasets, consider implementing pagination in queries
