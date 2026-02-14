@@ -9,7 +9,7 @@ import {
   type Fundamentals,
   type Symbol
 } from './db';
-import { simpleMovingAverage, atr14, rsi14 } from './indicators';
+import { simpleMovingAverage, wilderAtr, wilderRsi } from './indicators';
 import { runWithConcurrency, type PoolTask } from './concurrency';
 
 // ============= TYPE DEFINITIONS =============
@@ -847,14 +847,14 @@ export async function calculateIndicators(symbol: string): Promise<CalculatedInd
     indicators.sma200 = simpleMovingAverage(closes, 200);
   }
   
-  // Calculate ATR14
+  // Calculate ATR14 using Wilder's smoothing
   if (highs.length >= 15 && lows.length >= 15 && closes.length >= 15) {
-    indicators.atr14 = atr14(highs, lows, closes);
+    indicators.atr14 = wilderAtr(highs, lows, closes, 14);
   }
   
-  // Calculate RSI14
+  // Calculate RSI14 using Wilder's smoothing
   if (closes.length >= 15) {
-    indicators.rsi14 = rsi14(closes);
+    indicators.rsi14 = wilderRsi(closes, 14);
   }
   
   return indicators;
