@@ -10,6 +10,10 @@ export interface Symbol {
   currency?: string;
   sector?: string;
   industry?: string;
+  last_price_update?: string | null;
+  last_fundamentals_update?: string | null;
+  data_quality?: 'ok' | 'partial' | 'stale' | 'error';
+  last_error?: string | null;
 }
 
 export interface Price {
@@ -110,14 +114,21 @@ function executeInsert(query: string, params: any[] = []): void {
 
 export function upsertSymbol(symbolData: Symbol): void {
   const query = `
-    INSERT INTO symbols (symbol, name, asset_class, currency, sector, industry)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO symbols (
+      symbol, name, asset_class, currency, sector, industry,
+      last_price_update, last_fundamentals_update, data_quality, last_error
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(symbol) DO UPDATE SET
-      name = excluded.name,
-      asset_class = excluded.asset_class,
-      currency = excluded.currency,
-      sector = excluded.sector,
-      industry = excluded.industry
+      name = COALESCE(excluded.name, name),
+      asset_class = COALESCE(excluded.asset_class, asset_class),
+      currency = COALESCE(excluded.currency, currency),
+      sector = COALESCE(excluded.sector, sector),
+      industry = COALESCE(excluded.industry, industry),
+      last_price_update = COALESCE(excluded.last_price_update, last_price_update),
+      last_fundamentals_update = COALESCE(excluded.last_fundamentals_update, last_fundamentals_update),
+      data_quality = COALESCE(excluded.data_quality, data_quality),
+      last_error = excluded.last_error
   `;
   
   executeInsert(query, [
@@ -126,7 +137,11 @@ export function upsertSymbol(symbolData: Symbol): void {
     symbolData.asset_class || null,
     symbolData.currency || null,
     symbolData.sector || null,
-    symbolData.industry || null
+    symbolData.industry || null,
+    symbolData.last_price_update || null,
+    symbolData.last_fundamentals_update || null,
+    symbolData.data_quality || null,
+    symbolData.last_error || null
   ]);
 }
 

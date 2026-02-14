@@ -13,6 +13,10 @@
     "riskBasis": "avg_cost",
     "maxRiskPctPerPosition": 1.0
   },
+  "dataQuality": {
+    "priceStaleMinutes": 10,
+    "fundamentalsStaleDays": 7
+  },
   "reddit": {
     "enabled": false,
     "sources": ["wallstreetbets", "stocks", "options"],

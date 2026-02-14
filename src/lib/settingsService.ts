@@ -15,6 +15,10 @@ export interface Settings {
     riskBasis: 'avg_cost' | 'current_price';
     maxRiskPctPerPosition: number;
   };
+  dataQuality: {
+    priceStaleMinutes: number;
+    fundamentalsStaleDays: number;
+  };
   reddit: {
     enabled: boolean;
     sources: string[];
@@ -60,6 +64,10 @@ export function getSettings(): Settings {
           ...defaultSettings.riskManagement,
           ...(userSettings.riskManagement || {})
         },
+        dataQuality: {
+          ...defaultSettings.dataQuality,
+          ...(userSettings.dataQuality || {})
+        },
         reddit: {
           ...defaultSettings.reddit,
           ...(userSettings.reddit || {})
@@ -99,6 +107,10 @@ export function updateSettings(settings: Partial<Settings>): void {
       riskManagement: {
         ...current.riskManagement,
         ...(settings.riskManagement || {})
+      },
+      dataQuality: {
+        ...current.dataQuality,
+        ...(settings.dataQuality || {})
       },
       reddit: {
         ...current.reddit,

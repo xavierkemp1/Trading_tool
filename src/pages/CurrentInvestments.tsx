@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import SectionHeader from '../components/SectionHeader';
 import PositionForm from '../components/PositionForm';
+import DataQualityIndicator from '../components/DataQualityIndicator';
 import { getAllPositions, getLatestPrice, getFundamentals, deletePosition, getSymbol, type Position } from '../lib/db';
 import { calculateIndicators } from '../lib/dataService';
 import { getActionBadge, getFlags, getRiskFlags, type RuleInputs } from '../lib/rules';
@@ -237,7 +238,12 @@ export default function CurrentInvestments() {
                     className="cursor-pointer hover:bg-slate-800/50"
                     onClick={() => setSelectedSymbol(position.symbol)}
                   >
-                    <td className="font-semibold text-slate-100">{position.symbol}</td>
+                    <td className="font-semibold text-slate-100">
+                      <div className="flex items-center gap-2">
+                        {position.symbol}
+                        <DataQualityIndicator symbol={position.symbol} />
+                      </div>
+                    </td>
                     <td>{position.portfolioPct.toFixed(1)}%</td>
                     <td>{position.qty}</td>
                     <td>${position.avgCost.toFixed(2)}</td>

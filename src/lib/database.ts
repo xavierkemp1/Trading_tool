@@ -1,11 +1,18 @@
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 import schemaSQL from './db/migrations/001_init.sql';
+import migration002 from './db/migrations/002_data_quality.sql';
 import { getDbBytes, setDbBytes, clearDbBytes, IDB_NAME, IDB_STORE } from './idbStore';
 
 const DB_KEY = 'trading_app_db'; // Keep for migration from localStorage
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Updated to version 2 for data quality migration
 const MAX_FILE_PATH_LENGTH = 100; // Max length to distinguish file paths from SQL content
 const SAVE_DEBOUNCE_MS = 2000; // Debounce database saves by 2 seconds
+
+// Migration definitions
+const MIGRATIONS = [
+  { version: 1, sql: schemaSQL, description: 'Initial schema' },
+  { version: 2, sql: migration002, description: 'Data quality tracking' }
+];
 
 let dbInstance: Database | null = null;
 let sqlJs: SqlJsStatic | null = null;
@@ -82,6 +89,9 @@ export async function initDatabase(): Promise<Database> {
       console.log('Loading existing database from IndexedDB...');
       dbInstance = new sqlJs.Database(savedData);
       console.log('Database loaded from IndexedDB');
+      
+      // Apply any pending migrations
+      await applyMigrations(dbInstance);
     } else {
       // Create new database
       console.log('Creating new database...');
@@ -111,27 +121,68 @@ export async function initDatabase(): Promise<Database> {
 }
 
 /**
+ * Get current database version
+ */
+function getDatabaseVersion(db: Database): number {
+  try {
+    const result = db.exec("SELECT value FROM _meta WHERE key = 'version'");
+    if (result.length > 0 && result[0].values.length > 0) {
+      return parseInt(result[0].values[0][0] as string, 10);
+    }
+  } catch (error) {
+    // _meta table doesn't exist yet
+    return 0;
+  }
+  return 0;
+}
+
+/**
+ * Apply pending migrations to bring database to current version
+ */
+async function applyMigrations(db: Database): Promise<void> {
+  const currentVersion = getDatabaseVersion(db);
+  console.log(`Current database version: ${currentVersion}`);
+  
+  // Create meta table if it doesn't exist
+  db.exec(`CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value TEXT)`);
+  
+  // Apply migrations that haven't been applied yet
+  for (const migration of MIGRATIONS) {
+    if (migration.version > currentVersion) {
+      console.log(`Applying migration ${migration.version}: ${migration.description}`);
+      
+      try {
+        // Validate migration SQL
+        if (typeof migration.sql !== 'string' || migration.sql.trim().length === 0) {
+          throw new Error(`Invalid migration SQL for version ${migration.version}`);
+        }
+        
+        db.exec(migration.sql);
+        db.exec(`INSERT OR REPLACE INTO _meta (key, value) VALUES ('version', '${migration.version}')`);
+        
+        console.log(`Migration ${migration.version} completed successfully`);
+      } catch (error) {
+        console.error(`Failed to apply migration ${migration.version}:`, error);
+        throw new Error(`Migration ${migration.version} failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+  }
+  
+  // Save database immediately after migrations
+  if (currentVersion < DB_VERSION) {
+    await saveDatabaseImmediate();
+    console.log('Database migrations completed and saved');
+  }
+}
+
+/**
  * Load schema from imported SQL file
  */
 async function loadSchema(db: Database): Promise<void> {
   try {
-    // Validate that schemaSQL is a valid SQL string
-    if (typeof schemaSQL !== 'string' || schemaSQL.trim().length === 0) {
-      throw new Error(`Invalid schema SQL: expected non-empty string, got ${typeof schemaSQL}`);
-    }
-    
-    // Check if schemaSQL looks like a file path (common import issue)
-    if (schemaSQL.includes('.sql') && schemaSQL.length < MAX_FILE_PATH_LENGTH) {
-      throw new Error(`Schema SQL appears to be a file path (${schemaSQL}) instead of SQL content. Check Vite configuration for SQL file loading.`);
-    }
-    
-    console.log('Executing schema SQL...');
-    db.exec(schemaSQL);
+    // For new databases, apply all migrations in order
+    await applyMigrations(db);
     console.log('Schema loaded successfully');
-    
-    // Store version info
-    db.exec(`CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value TEXT)`);
-    db.exec(`INSERT OR REPLACE INTO _meta (key, value) VALUES ('version', '${DB_VERSION}')`);
   } catch (error) {
     console.error('Failed to load schema:', error);
     if (error instanceof Error) {
