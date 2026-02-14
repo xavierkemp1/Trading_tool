@@ -1,7 +1,10 @@
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 import schemaSQL from './db/migrations/001_init.sql';
+import { getDbBytes, setDbBytes, clearDbBytes } from './idbStore';
 
-const DB_KEY = 'trading_app_db';
+const DB_KEY = 'trading_app_db'; // Keep for migration from localStorage
+const IDB_NAME = 'trading_tool';
+const IDB_STORE = 'sqlite';
 const DB_VERSION = 1;
 const MAX_FILE_PATH_LENGTH = 100; // Max length to distinguish file paths from SQL content
 const SAVE_DEBOUNCE_MS = 2000; // Debounce database saves by 2 seconds
@@ -10,6 +13,45 @@ let dbInstance: Database | null = null;
 let sqlJs: SqlJsStatic | null = null;
 let saveTimeout: number | null = null;
 let pendingSave = false;
+
+/**
+ * Migrates existing localStorage database to IndexedDB
+ * Runs once on first load with new system
+ * Removes localStorage data after successful migration
+ */
+async function migrateFromLocalStorage(): Promise<boolean> {
+  try {
+    // Check if localStorage has old database
+    const savedDb = localStorage.getItem(DB_KEY);
+    if (!savedDb) {
+      return false;
+    }
+
+    // Check if IndexedDB already has data
+    const existingBytes = await getDbBytes();
+    if (existingBytes) {
+      console.log('IndexedDB already has data, skipping migration');
+      return false;
+    }
+
+    console.log('Migrating database from localStorage to IndexedDB...');
+    
+    // Decode base64 data from localStorage
+    const data = Uint8Array.from(atob(savedDb), c => c.charCodeAt(0));
+    
+    // Save to IndexedDB
+    await setDbBytes(data);
+    
+    // Remove from localStorage after successful migration
+    localStorage.removeItem(DB_KEY);
+    
+    console.log('Database migration completed successfully');
+    return true;
+  } catch (error) {
+    console.error('Failed to migrate database from localStorage:', error);
+    return false;
+  }
+}
 
 /**
  * Initialize sql.js and load the database
@@ -31,15 +73,17 @@ export async function initDatabase(): Promise<Database> {
       console.log('SQL.js loaded successfully');
     }
 
-    // Try to load existing database from localStorage
-    const savedDb = localStorage.getItem(DB_KEY);
+    // Try to migrate from localStorage if needed
+    await migrateFromLocalStorage();
+
+    // Try to load existing database from IndexedDB
+    const savedData = await getDbBytes();
     
-    if (savedDb) {
+    if (savedData) {
       // Load existing database
-      console.log('Loading existing database from localStorage...');
-      const data = Uint8Array.from(atob(savedDb), c => c.charCodeAt(0));
-      dbInstance = new sqlJs.Database(data);
-      console.log('Database loaded from localStorage');
+      console.log('Loading existing database from IndexedDB...');
+      dbInstance = new sqlJs.Database(savedData);
+      console.log('Database loaded from IndexedDB');
     } else {
       // Create new database
       console.log('Creating new database...');
@@ -50,7 +94,7 @@ export async function initDatabase(): Promise<Database> {
         await loadSchema(dbInstance);
       }
       
-      // Save to localStorage immediately for initial creation
+      // Save to IndexedDB immediately for initial creation
       await saveDatabaseImmediate();
       console.log('New database created and schema loaded');
     }
@@ -100,7 +144,7 @@ async function loadSchema(db: Database): Promise<void> {
 }
 
 /**
- * Save database to localStorage with debouncing
+ * Save database to IndexedDB with debouncing
  */
 export function saveDatabase(): void {
   if (!dbInstance) {
@@ -126,7 +170,7 @@ export function saveDatabase(): void {
 }
 
 /**
- * Save database to localStorage immediately without debouncing
+ * Save database to IndexedDB immediately without debouncing
  */
 export async function saveDatabaseImmediate(): Promise<void> {
   if (!dbInstance) {
@@ -136,16 +180,8 @@ export async function saveDatabaseImmediate(): Promise<void> {
   try {
     const data = dbInstance.export();
     
-    // Convert Uint8Array to base64 in chunks to prevent stack overflow
-    const chunkSize = 65536; // 64KB chunks
-    let base64String = '';
-    for (let i = 0; i < data.length; i += chunkSize) {
-      const chunk = data.subarray(i, Math.min(i + chunkSize, data.length));
-      base64String += String.fromCharCode(...chunk);
-    }
-    
-    const base64 = btoa(base64String);
-    localStorage.setItem(DB_KEY, base64);
+    // Save directly to IndexedDB (no base64 encoding needed)
+    await setDbBytes(data);
     
     // Clear pending save flag
     pendingSave = false;
@@ -170,7 +206,7 @@ export function getDatabase(): Database {
  * Clear the database and reset to initial schema
  */
 export async function resetDatabase(): Promise<void> {
-  localStorage.removeItem(DB_KEY);
+  await clearDbBytes();
   dbInstance = null;
   await initDatabase();
 }
@@ -209,7 +245,7 @@ export async function importDatabase(file: File): Promise<void> {
     // Create new database from imported data
     dbInstance = new sqlJs.Database(data);
     
-    // Save to localStorage immediately for imports
+    // Save to IndexedDB immediately for imports
     await saveDatabaseImmediate();
   } catch (error) {
     console.error('Failed to import database:', error);
