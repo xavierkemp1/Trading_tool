@@ -30,6 +30,8 @@ export interface PositionSnapshot {
   rsi?: number;
   actionBadge: ActionBadge;
   flags: string[];
+  riskDollars?: number;
+  riskPctOfPortfolio?: number;
 }
 
 export interface WatchlistItem {

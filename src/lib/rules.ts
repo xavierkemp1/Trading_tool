@@ -1,4 +1,6 @@
 import { ActionBadge } from './types';
+import type { PositionRisk } from './riskMetrics';
+import type { Settings } from './settingsService';
 
 export interface RuleInputs {
   close: number;
@@ -56,5 +58,25 @@ export function getFlags(inputs: RuleInputs): string[] {
     flags.push('Big move');
   }
 
+  return flags;
+}
+
+/**
+ * Generate risk-related flags based on position risk metrics
+ * These flags help identify positions that violate risk management rules
+ */
+export function getRiskFlags(risk: PositionRisk, settings: Settings): string[] {
+  const flags: string[] = [];
+  
+  // Check if risk exceeds maximum allowed per position
+  if (risk.riskPctOfPortfolio > settings.riskManagement.maxRiskPctPerPosition) {
+    flags.push('Risk too high');
+  }
+  
+  // Flag positions without invalidation set
+  if (risk.riskPerShare === 0) {
+    flags.push('Invalidation missing');
+  }
+  
   return flags;
 }
