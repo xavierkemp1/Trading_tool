@@ -1,17 +1,19 @@
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 import schemaSQL from './db/migrations/001_init.sql';
 import migration002 from './db/migrations/002_data_quality.sql';
+import migration003 from './db/migrations/003_corporate_actions.sql';
 import { getDbBytes, setDbBytes, clearDbBytes, IDB_NAME, IDB_STORE } from './idbStore';
 
 const DB_KEY = 'trading_app_db'; // Keep for migration from localStorage
-const DB_VERSION = 2; // Updated to version 2 for data quality migration.
+const DB_VERSION = 3; // Updated to version 3 for corporate actions tracking.
 const MAX_FILE_PATH_LENGTH = 100; // Max length to distinguish file paths from SQL content
 const SAVE_DEBOUNCE_MS = 2000; // Debounce database saves by 2 seconds
 
 // Migration definitions
 const MIGRATIONS = [
   { version: 1, sql: schemaSQL, description: 'Initial schema' },
-  { version: 2, sql: migration002, description: 'Data quality tracking' }
+  { version: 2, sql: migration002, description: 'Data quality tracking' },
+  { version: 3, sql: migration003, description: 'Corporate actions tracking' }
 ];
 
 let dbInstance: Database | null = null;

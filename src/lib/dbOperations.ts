@@ -14,6 +14,8 @@ export interface Symbol {
   last_fundamentals_update?: string | null;
   data_quality?: 'ok' | 'partial' | 'stale' | 'error';
   last_error?: string | null;
+  corporate_action_warning?: string | null;
+  warning_created_at?: string | null;
 }
 
 export interface Price {
@@ -116,9 +118,10 @@ export function upsertSymbol(symbolData: Symbol): void {
   const query = `
     INSERT INTO symbols (
       symbol, name, asset_class, currency, sector, industry,
-      last_price_update, last_fundamentals_update, data_quality, last_error
+      last_price_update, last_fundamentals_update, data_quality, last_error,
+      corporate_action_warning, warning_created_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(symbol) DO UPDATE SET
       name = COALESCE(excluded.name, name),
       asset_class = COALESCE(excluded.asset_class, asset_class),
@@ -128,7 +131,9 @@ export function upsertSymbol(symbolData: Symbol): void {
       last_price_update = COALESCE(excluded.last_price_update, last_price_update),
       last_fundamentals_update = COALESCE(excluded.last_fundamentals_update, last_fundamentals_update),
       data_quality = COALESCE(excluded.data_quality, data_quality),
-      last_error = excluded.last_error
+      last_error = excluded.last_error,
+      corporate_action_warning = excluded.corporate_action_warning,
+      warning_created_at = excluded.warning_created_at
   `;
   
   executeInsert(query, [
@@ -141,7 +146,9 @@ export function upsertSymbol(symbolData: Symbol): void {
     symbolData.last_price_update || null,
     symbolData.last_fundamentals_update || null,
     symbolData.data_quality || null,
-    symbolData.last_error || null
+    symbolData.last_error || null,
+    symbolData.corporate_action_warning || null,
+    symbolData.warning_created_at || null
   ]);
 }
 

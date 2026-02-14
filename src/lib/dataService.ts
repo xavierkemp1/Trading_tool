@@ -11,6 +11,7 @@ import {
 } from './db';
 import { simpleMovingAverage, wilderAtr, wilderRsi } from './indicators';
 import { runWithConcurrency, type PoolTask } from './concurrency';
+import { detectStockSplit, formatCorporateActionWarning } from './corporateActions';
 
 // ============= TYPE DEFINITIONS =============
 
@@ -511,11 +512,15 @@ export async function fetchMarketData(symbol: string): Promise<MarketDataResult>
     // Validate data quality
     const quality = validatePriceData(prices);
     
+    // Check for corporate actions (splits)
+    const splitDetection = detectStockSplit(prices);
+    const corporateActionWarning = formatCorporateActionWarning(splitDetection);
+    
     // Store in database
     if (prices.length > 0) {
       addPrices(prices);
       
-      // Update symbol metadata with data quality tracking
+      // Update symbol metadata with data quality tracking and corporate action warnings
       upsertSymbol({
         symbol: upperSymbol,
         name: meta?.longName || meta?.shortName,
@@ -523,7 +528,9 @@ export async function fetchMarketData(symbol: string): Promise<MarketDataResult>
         asset_class: 'stock',
         last_price_update: new Date().toISOString(),
         data_quality: quality,
-        last_error: null
+        last_error: null,
+        corporate_action_warning: corporateActionWarning,
+        warning_created_at: corporateActionWarning ? new Date().toISOString() : null
       });
     }
     
