@@ -28,25 +28,27 @@ export function detectStockSplit(prices: Price[]): CorporateActionDetection {
     return { detected: false, confidence: 'low' };
   }
   
-  // Sort by date descending to ensure we have chronological order
+  // Sort by date descending to ensure we have chronological order (newest first)
   const sortedPrices = [...prices].sort((a, b) => b.date.localeCompare(a.date));
   
   // Check last 20 days for abnormal price movements
   for (let i = 1; i < Math.min(20, sortedPrices.length); i++) {
-    const current = sortedPrices[i];
-    const previous = sortedPrices[i - 1];
+    // When sorted DESC: i-1 is newer, i is older
+    const newer = sortedPrices[i - 1];
+    const older = sortedPrices[i];
     
-    if (!current || !previous) continue;
+    if (!newer || !older) continue;
     
-    const priceChange = (current.close - previous.close) / previous.close;
-    const openVsPrevClose = current.open / previous.close;
+    // Calculate price change from older to newer
+    const priceChange = (newer.close - older.close) / older.close;
+    const openVsPrevClose = newer.open / older.close;
     
     // Calculate average volume of previous 10 days (excluding current day)
     const avgVolume = sortedPrices
       .slice(i + 1, i + 11)
       .reduce((sum, p) => sum + p.volume, 0) / 10;
     
-    const volumeIncrease = avgVolume > 0 ? current.volume / avgVolume : 1;
+    const volumeIncrease = avgVolume > 0 ? newer.volume / avgVolume : 1;
     
     // Check for 2:1 split (price drops ~50%)
     if (
@@ -60,9 +62,9 @@ export function detectStockSplit(prices: Price[]): CorporateActionDetection {
         detected: true,
         type: 'split',
         ratio: '2:1',
-        date: current.date,
+        date: newer.date,
         confidence: 'high',
-        details: `Price dropped ${Math.abs(priceChange * 100).toFixed(1)}% on ${current.date} with ${(volumeIncrease * 100).toFixed(0)}% volume increase`
+        details: `Price dropped ${Math.abs(priceChange * 100).toFixed(1)}% on ${newer.date} with ${(volumeIncrease * 100).toFixed(0)}% volume increase`
       };
     }
     
@@ -78,9 +80,9 @@ export function detectStockSplit(prices: Price[]): CorporateActionDetection {
         detected: true,
         type: 'split',
         ratio: '3:1',
-        date: current.date,
+        date: newer.date,
         confidence: 'high',
-        details: `Price dropped ${Math.abs(priceChange * 100).toFixed(1)}% on ${current.date} with ${(volumeIncrease * 100).toFixed(0)}% volume increase`
+        details: `Price dropped ${Math.abs(priceChange * 100).toFixed(1)}% on ${newer.date} with ${(volumeIncrease * 100).toFixed(0)}% volume increase`
       };
     }
     
@@ -96,9 +98,9 @@ export function detectStockSplit(prices: Price[]): CorporateActionDetection {
         detected: true,
         type: 'split',
         ratio: '4:1',
-        date: current.date,
+        date: newer.date,
         confidence: 'high',
-        details: `Price dropped ${Math.abs(priceChange * 100).toFixed(1)}% on ${current.date} with ${(volumeIncrease * 100).toFixed(0)}% volume increase`
+        details: `Price dropped ${Math.abs(priceChange * 100).toFixed(1)}% on ${newer.date} with ${(volumeIncrease * 100).toFixed(0)}% volume increase`
       };
     }
     
@@ -114,9 +116,9 @@ export function detectStockSplit(prices: Price[]): CorporateActionDetection {
         detected: true,
         type: 'reverse_split',
         ratio: '1:2',
-        date: current.date,
+        date: newer.date,
         confidence: 'high',
-        details: `Price increased ${(priceChange * 100).toFixed(1)}% on ${current.date} with ${(volumeIncrease * 100).toFixed(0)}% volume increase`
+        details: `Price increased ${(priceChange * 100).toFixed(1)}% on ${newer.date} with ${(volumeIncrease * 100).toFixed(0)}% volume increase`
       };
     }
     
@@ -128,9 +130,9 @@ export function detectStockSplit(prices: Price[]): CorporateActionDetection {
       return {
         detected: true,
         type: 'unknown',
-        date: current.date,
+        date: newer.date,
         confidence: 'medium',
-        details: `Abnormal price movement of ${(priceChange * 100).toFixed(1)}% on ${current.date} with ${(volumeIncrease * 100).toFixed(0)}% volume increase`
+        details: `Abnormal price movement of ${(priceChange * 100).toFixed(1)}% on ${newer.date} with ${(volumeIncrease * 100).toFixed(0)}% volume increase`
       };
     }
   }

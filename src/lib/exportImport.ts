@@ -5,7 +5,7 @@
  * Supports both raw SQLite export and JSON format with version tracking
  */
 
-import { getDatabase, importDatabase, exportDatabase, saveDatabaseImmediate } from './database';
+import { getDatabase, importDatabase, exportDatabase, saveDatabaseImmediate, DB_VERSION, getCurrentDatabaseVersion } from './database';
 import { 
   getAllPositions, 
   getAllSymbols, 
@@ -28,7 +28,6 @@ import {
 } from './dbOperations';
 
 const APP_VERSION = '0.1.0';
-const SCHEMA_VERSION = 2; // Must match DB_VERSION in database.ts
 
 export interface JsonExportPayload {
   version: string;
@@ -74,6 +73,9 @@ export function exportDbBytes(): void {
 export async function exportJson(): Promise<void> {
   try {
     const db = getDatabase();
+    
+    // Get current database version from _meta table
+    const currentSchemaVersion = getCurrentDatabaseVersion();
     
     // Get all data from tables
     const symbols = getAllSymbols();
@@ -142,10 +144,10 @@ export async function exportJson(): Promise<void> {
         }))
       : [];
     
-    // Create JSON payload
+    // Create JSON payload with current schema version
     const payload: JsonExportPayload = {
       version: '1.0',
-      schemaVersion: SCHEMA_VERSION,
+      schemaVersion: currentSchemaVersion,
       exportedAt: new Date().toISOString(),
       appVersion: APP_VERSION,
       tables: {
@@ -203,6 +205,7 @@ export async function importDbBytes(file: File): Promise<void> {
 /**
  * Imports JSON backup
  * Validates version and clears existing data
+ * Supports importing older schema versions and migrates them automatically
  */
 export async function importJson(file: File): Promise<void> {
   try {
@@ -211,12 +214,16 @@ export async function importJson(file: File): Promise<void> {
     const payload: JsonExportPayload = JSON.parse(text);
     
     // Validate version
-    if (!payload.version || !payload.schemaVersion) {
+    if (!payload.version || payload.schemaVersion === undefined) {
       throw new Error('Invalid JSON backup file - missing version information');
     }
     
-    if (payload.schemaVersion !== SCHEMA_VERSION) {
-      throw new Error(`Incompatible schema version. Expected ${SCHEMA_VERSION}, got ${payload.schemaVersion}`);
+    // Check if imported version is newer than current DB version
+    if (payload.schemaVersion > DB_VERSION) {
+      throw new Error(
+        `Cannot import newer schema version. Backup is version ${payload.schemaVersion}, ` +
+        `but this app supports up to version ${DB_VERSION}. Please update the application.`
+      );
     }
     
     const db = getDatabase();
@@ -275,11 +282,22 @@ export async function importJson(file: File): Promise<void> {
         addJournalEntry(entryData);
       }
       
+      // Update the database version to match the imported version
+      db.run(`INSERT OR REPLACE INTO _meta (key, value) VALUES ('version', '${payload.schemaVersion}')`);
+      
       // Commit transaction
       db.run('COMMIT');
       
       // Save database immediately
       await saveDatabaseImmediate();
+      
+      // If imported version is older than current, apply migrations to bring it up to date
+      if (payload.schemaVersion < DB_VERSION) {
+        console.log(`Imported older version ${payload.schemaVersion}, applying migrations to ${DB_VERSION}...`);
+        const { initDatabase } = await import('./database');
+        await initDatabase(); // This will apply pending migrations
+        console.log('Migrations applied successfully');
+      }
       
       console.log('JSON import completed successfully');
     } catch (error) {

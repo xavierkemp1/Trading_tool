@@ -118,8 +118,8 @@ export default function CurrentInvestments() {
           snapshot.riskDollars = risk.riskDollars;
           snapshot.riskPctOfPortfolio = risk.riskPctOfPortfolio;
           
-          // Add risk flags
-          const riskFlags = getRiskFlags(risk, settings);
+          // Add risk flags (pass position.invalidation to distinguish missing vs trailing stop)
+          const riskFlags = getRiskFlags(risk, settings, position.invalidation);
           snapshot.flags = [...snapshot.flags, ...riskFlags];
         }
       });
