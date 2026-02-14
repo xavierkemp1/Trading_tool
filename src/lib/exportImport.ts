@@ -28,7 +28,7 @@ import {
 } from './dbOperations';
 
 const APP_VERSION = '0.1.0';
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2; // Must match DB_VERSION in database.ts
 
 export interface JsonExportPayload {
   version: string;

@@ -539,7 +539,9 @@ export async function fetchMarketData(symbol: string): Promise<MarketDataResult>
  * Validate price data quality
  */
 function validatePriceData(prices: Price[]): 'ok' | 'partial' | 'stale' {
-  if (prices.length < 50) return 'partial';
+  // Need at least ~2 months of daily data for meaningful technical analysis (50 trading days)
+  const MIN_PRICE_POINTS = 50;
+  if (prices.length < MIN_PRICE_POINTS) return 'partial';
   
   const hasVolume = prices.some(p => p.volume > 0);
   if (!hasVolume) return 'partial';
