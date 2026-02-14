@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import SectionHeader from '../components/SectionHeader';
 import StatPill from '../components/StatPill';
 import IndustryPieChart from '../components/IndustryPieChart';
@@ -6,6 +6,7 @@ import { useApp } from '../lib/AppContext';
 import { getAllPositions, getLatestPrice, getSymbol } from '../lib/db';
 import { refreshAllData, calculateIndicators } from '../lib/dataService';
 import { getActionBadge, getFlags, type RuleInputs } from '../lib/rules';
+import { exportDbBytes, exportJson, importDbBytes, importJson } from '../lib/exportImport';
 import type { AlertItem, RegimeSummary } from '../lib/types';
 import defaultSettings from '../settings/defaultSettings.json';
 
@@ -157,6 +158,9 @@ export default function Dashboard() {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewResult, setReviewResult] = useState<string | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAIReview = async () => {
     setReviewLoading(true);
@@ -178,6 +182,76 @@ export default function Dashboard() {
   const handleCloseReview = () => {
     setReviewResult(null);
     setReviewError(null);
+  };
+
+  const handleExportDb = () => {
+    try {
+      exportDbBytes();
+      setExportMessage('Database exported successfully!');
+      setTimeout(() => setExportMessage(null), 3000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Export failed';
+      setExportMessage(`Error: ${message}`);
+      setTimeout(() => setExportMessage(null), 5000);
+    }
+  };
+
+  const handleExportJson = async () => {
+    try {
+      await exportJson();
+      setExportMessage('JSON exported successfully!');
+      setTimeout(() => setExportMessage(null), 3000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Export failed';
+      setExportMessage(`Error: ${message}`);
+      setTimeout(() => setExportMessage(null), 5000);
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const confirmMessage = `This will replace ALL existing data with the imported backup. This action cannot be undone. Are you sure?`;
+    if (!confirm(confirmMessage)) {
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    try {
+      setImportMessage('Importing...');
+      
+      if (file.name.endsWith('.json')) {
+        await importJson(file);
+        setImportMessage('JSON imported successfully! Reloading...');
+      } else if (file.name.endsWith('.sqlite') || file.name.endsWith('.db')) {
+        await importDbBytes(file);
+        setImportMessage('Database imported successfully! Reloading...');
+      } else {
+        throw new Error('Invalid file type. Please upload a .sqlite, .db, or .json file');
+      }
+
+      // Reload the page after successful import
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Import failed';
+      setImportMessage(`Error: ${message}`);
+      setTimeout(() => setImportMessage(null), 5000);
+    } finally {
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
   };
 
   return (
@@ -319,6 +393,59 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="mt-4 text-sm text-slate-400">No positions found. Add positions in the Current Investments page.</div>
+        )}
+      </div>
+
+      <div className="card">
+        <SectionHeader title="Backup & Restore" subtitle="Export and import your database" />
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div>
+            <p className="text-xs font-medium text-slate-300 mb-2">Export</p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleExportDb}
+                className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800"
+              >
+                Export SQLite DB
+              </button>
+              <button
+                onClick={handleExportJson}
+                className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800"
+              >
+                Export JSON
+              </button>
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-300 mb-2">Import</p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleImportClick}
+                className="rounded-lg border border-rose-700 px-3 py-2 text-xs text-rose-200 hover:bg-rose-500/10"
+              >
+                Import Backup
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".sqlite,.db,.json"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              ⚠️ Import will replace all existing data
+            </p>
+          </div>
+        </div>
+        {(exportMessage || importMessage) && (
+          <div className={`mt-4 rounded-lg border p-3 text-xs ${
+            exportMessage?.startsWith('Error') || importMessage?.startsWith('Error')
+              ? 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+              : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+          }`}>
+            {exportMessage || importMessage}
+          </div>
         )}
       </div>
 

@@ -469,49 +469,88 @@ export async function fetchMarketData(symbol: string): Promise<MarketDataResult>
     }
   }
   
-  // Try yfinance first (free, no API key)
-  let response = await fetchYFinanceChart(upperSymbol);
-  
-  // Fallback to Alpha Vantage
-  if (!response.success) {
-    console.warn(`yfinance failed for ${upperSymbol}: ${response.error}`);
-    response = await fetchAlphaVantageDaily(upperSymbol);
-  }
-  
-  // Fallback to Massive
-  if (!response.success) {
-    console.warn(`Alpha Vantage failed for ${upperSymbol}: ${response.error}`);
-    response = await fetchMassiveAggregates(upperSymbol);
-  }
-  
-  if (!response.success) {
-    throw new Error(`All APIs failed for ${upperSymbol}: ${response.error}`);
-  }
-  
-  const prices = response.data.prices as Price[];
-  const meta = response.data.meta;
-  
-  // Store in database
-  if (prices.length > 0) {
-    addPrices(prices);
+  try {
+    // Try yfinance first (free, no API key)
+    let response = await fetchYFinanceChart(upperSymbol);
     
-    // Update symbol metadata if available
-    if (meta) {
+    // Fallback to Alpha Vantage
+    if (!response.success) {
+      console.warn(`yfinance failed for ${upperSymbol}: ${response.error}`);
+      response = await fetchAlphaVantageDaily(upperSymbol);
+    }
+    
+    // Fallback to Massive
+    if (!response.success) {
+      console.warn(`Alpha Vantage failed for ${upperSymbol}: ${response.error}`);
+      response = await fetchMassiveAggregates(upperSymbol);
+    }
+    
+    if (!response.success) {
+      // Update symbol with error state
       upsertSymbol({
         symbol: upperSymbol,
-        name: meta.longName || meta.shortName,
-        currency: meta.currency,
-        asset_class: 'stock'
+        data_quality: 'error',
+        last_error: response.error || 'All APIs failed'
+      });
+      throw new Error(`All APIs failed for ${upperSymbol}: ${response.error}`);
+    }
+    
+    const prices = response.data.prices as Price[];
+    const meta = response.data.meta;
+    
+    // Validate data quality
+    const quality = validatePriceData(prices);
+    
+    // Store in database
+    if (prices.length > 0) {
+      addPrices(prices);
+      
+      // Update symbol metadata with data quality tracking
+      upsertSymbol({
+        symbol: upperSymbol,
+        name: meta?.longName || meta?.shortName,
+        currency: meta?.currency,
+        asset_class: 'stock',
+        last_price_update: new Date().toISOString(),
+        data_quality: quality,
+        last_error: null
       });
     }
+    
+    return {
+      symbol: upperSymbol,
+      prices,
+      source: response.source!,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    // Update symbol with error state
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    upsertSymbol({
+      symbol: upperSymbol,
+      data_quality: 'error',
+      last_error: errorMessage
+    });
+    throw error;
   }
+}
+
+/**
+ * Validate price data quality
+ */
+function validatePriceData(prices: Price[]): 'ok' | 'partial' | 'stale' {
+  // Need at least ~2 months of daily data for meaningful technical analysis (50 trading days)
+  const MIN_PRICE_POINTS = 50;
+  if (prices.length < MIN_PRICE_POINTS) return 'partial';
   
-  return {
-    symbol: upperSymbol,
-    prices,
-    source: response.source!,
-    timestamp: new Date().toISOString()
-  };
+  const hasVolume = prices.some(p => p.volume > 0);
+  if (!hasVolume) return 'partial';
+  
+  const latestDate = new Date(prices[prices.length - 1].date);
+  const daysSinceUpdate = (Date.now() - latestDate.getTime()) / (1000 * 60 * 60 * 24);
+  if (daysSinceUpdate > 2) return 'stale';
+  
+  return 'ok';
 }
 
 /**
@@ -531,71 +570,102 @@ export async function fetchFundamentals(symbol: string): Promise<FundamentalsRes
     };
   }
   
-  // Try Alpha Vantage first (has best fundamental data)
-  let response = await fetchAlphaVantageOverview(upperSymbol);
-  let source: 'alphavantage' | 'massive' = 'alphavantage';
-  
-  // Fallback to Massive
-  if (!response.success) {
-    console.warn(`Alpha Vantage fundamentals failed for ${upperSymbol}: ${response.error}`);
-    response = await fetchMassiveTickerDetails(upperSymbol);
-    source = 'massive';
-  }
-  
-  if (!response.success) {
-    throw new Error(`Failed to fetch fundamentals for ${upperSymbol}: ${response.error}`);
-  }
-  
-  // Map to our schema
-  const fundamentals: Fundamentals = {
-    symbol: upperSymbol,
-    fetched_at: new Date().toISOString()
-  };
-  
-  if (source === 'alphavantage') {
-    const data = response.data;
-    fundamentals.market_cap = parseFloatSafe(data.MarketCapitalization);
-    fundamentals.trailing_pe = parseFloatSafe(data.PERatio);
-    fundamentals.forward_pe = parseFloatSafe(data.ForwardPE);
-    fundamentals.price_to_sales = parseFloatSafe(data.PriceToSalesRatioTTM);
-    fundamentals.profit_margins = parseFloatSafe(data.ProfitMargin);
-    fundamentals.revenue_growth = parseFloatSafe(data.QuarterlyRevenueGrowthYOY);
-    fundamentals.earnings_growth = parseFloatSafe(data.QuarterlyEarningsGrowthYOY);
-    fundamentals.dividend_yield = parseFloatSafe(data.DividendYield);
-    fundamentals.beta = parseFloatSafe(data.Beta);
+  try {
+    // Try Alpha Vantage first (has best fundamental data)
+    let response = await fetchAlphaVantageOverview(upperSymbol);
+    let source: 'alphavantage' | 'massive' = 'alphavantage';
     
-    // Update symbol info
+    // Fallback to Massive
+    if (!response.success) {
+      console.warn(`Alpha Vantage fundamentals failed for ${upperSymbol}: ${response.error}`);
+      response = await fetchMassiveTickerDetails(upperSymbol);
+      source = 'massive';
+    }
+    
+    if (!response.success) {
+      // Update symbol with error state
+      upsertSymbol({
+        symbol: upperSymbol,
+        data_quality: 'error',
+        last_error: response.error || 'Failed to fetch fundamentals'
+      });
+      throw new Error(`Failed to fetch fundamentals for ${upperSymbol}: ${response.error}`);
+    }
+    
+    // Map to our schema
+    const fundamentals: Fundamentals = {
+      symbol: upperSymbol,
+      fetched_at: new Date().toISOString()
+    };
+    
+    // Check for missing critical fields
+    let quality: 'ok' | 'partial' = 'ok';
+    
+    if (source === 'alphavantage') {
+      const data = response.data;
+      fundamentals.market_cap = parseFloatSafe(data.MarketCapitalization);
+      fundamentals.trailing_pe = parseFloatSafe(data.PERatio);
+      fundamentals.forward_pe = parseFloatSafe(data.ForwardPE);
+      fundamentals.price_to_sales = parseFloatSafe(data.PriceToSalesRatioTTM);
+      fundamentals.profit_margins = parseFloatSafe(data.ProfitMargin);
+      fundamentals.revenue_growth = parseFloatSafe(data.QuarterlyRevenueGrowthYOY);
+      fundamentals.earnings_growth = parseFloatSafe(data.QuarterlyEarningsGrowthYOY);
+      fundamentals.dividend_yield = parseFloatSafe(data.DividendYield);
+      fundamentals.beta = parseFloatSafe(data.Beta);
+      
+      // Check for critical missing data
+      if (!data.MarketCapitalization) {
+        quality = 'partial';
+      }
+      
+      // Update symbol info with data quality tracking
+      upsertSymbol({
+        symbol: upperSymbol,
+        name: data.Name,
+        sector: data.Sector,
+        industry: data.Industry,
+        asset_class: 'stock',
+        currency: 'USD',
+        last_fundamentals_update: new Date().toISOString(),
+        data_quality: quality,
+        last_error: null
+      });
+    } else if (source === 'massive') {
+      const data = response.data;
+      fundamentals.market_cap = data.market_cap;
+      
+      // Update symbol info with data quality tracking
+      upsertSymbol({
+        symbol: upperSymbol,
+        name: data.name,
+        sector: data.sic_description,
+        asset_class: data.type,
+        currency: data.currency_name,
+        last_fundamentals_update: new Date().toISOString(),
+        data_quality: quality,
+        last_error: null
+      });
+    }
+    
+    // Store in database
+    upsertFundamentals(fundamentals);
+    
+    return {
+      symbol: upperSymbol,
+      fundamentals,
+      source,
+      timestamp: fundamentals.fetched_at
+    };
+  } catch (error) {
+    // Update symbol with error state
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     upsertSymbol({
       symbol: upperSymbol,
-      name: data.Name,
-      sector: data.Sector,
-      industry: data.Industry,
-      asset_class: 'stock',
-      currency: 'USD'
+      data_quality: 'error',
+      last_error: errorMessage
     });
-  } else if (source === 'massive') {
-    const data = response.data;
-    fundamentals.market_cap = data.market_cap;
-    
-    // Update symbol info
-    upsertSymbol({
-      symbol: upperSymbol,
-      name: data.name,
-      sector: data.sic_description,
-      asset_class: data.type,
-      currency: data.currency_name
-    });
+    throw error;
   }
-  
-  // Store in database
-  upsertFundamentals(fundamentals);
-  
-  return {
-    symbol: upperSymbol,
-    fundamentals,
-    source,
-    timestamp: fundamentals.fetched_at
-  };
 }
 
 /**

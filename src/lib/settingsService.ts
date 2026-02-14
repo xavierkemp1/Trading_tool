@@ -11,6 +11,14 @@ export interface Settings {
     rsiOverbought: number;
     exitBelowSma200: boolean;
   };
+  riskManagement: {
+    riskBasis: 'avg_cost' | 'current_price';
+    maxRiskPctPerPosition: number;
+  };
+  dataQuality: {
+    priceStaleMinutes: number;
+    fundamentalsStaleDays: number;
+  };
   reddit: {
     enabled: boolean;
     sources: string[];
@@ -45,12 +53,20 @@ export function getSettings(): Settings {
     if (stored) {
       const userSettings = JSON.parse(stored);
       // Merge with defaults to ensure all fields exist
-      return {
+      const merged = {
         ...defaultSettings,
         ...userSettings,
         actionBadgeRules: {
           ...defaultSettings.actionBadgeRules,
           ...(userSettings.actionBadgeRules || {})
+        },
+        riskManagement: {
+          ...defaultSettings.riskManagement,
+          ...(userSettings.riskManagement || {})
+        },
+        dataQuality: {
+          ...defaultSettings.dataQuality,
+          ...(userSettings.dataQuality || {})
         },
         reddit: {
           ...defaultSettings.reddit,
@@ -69,12 +85,13 @@ export function getSettings(): Settings {
           ...(userSettings.riskBands || {})
         }
       };
+      return merged as Settings;
     }
   } catch (err) {
     console.error('Failed to load settings from localStorage:', err);
   }
   
-  return defaultSettings;
+  return defaultSettings as Settings;
 }
 
 export function updateSettings(settings: Partial<Settings>): void {
@@ -86,6 +103,14 @@ export function updateSettings(settings: Partial<Settings>): void {
       actionBadgeRules: {
         ...current.actionBadgeRules,
         ...(settings.actionBadgeRules || {})
+      },
+      riskManagement: {
+        ...current.riskManagement,
+        ...(settings.riskManagement || {})
+      },
+      dataQuality: {
+        ...current.dataQuality,
+        ...(settings.dataQuality || {})
       },
       reddit: {
         ...current.reddit,

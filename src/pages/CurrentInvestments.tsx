@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import SectionHeader from '../components/SectionHeader';
 import PositionForm from '../components/PositionForm';
+import DataQualityIndicator from '../components/DataQualityIndicator';
 import { getAllPositions, getLatestPrice, getFundamentals, deletePosition, getSymbol, type Position } from '../lib/db';
 import { calculateIndicators } from '../lib/dataService';
-import { getActionBadge, getFlags, type RuleInputs } from '../lib/rules';
+import { getActionBadge, getFlags, getRiskFlags, type RuleInputs } from '../lib/rules';
+import { calculatePositionRisk } from '../lib/riskMetrics';
+import { getSettings } from '../lib/settingsService';
 import type { PositionSnapshot } from '../lib/types';
 import defaultSettings from '../settings/defaultSettings.json';
 
@@ -22,6 +25,7 @@ export default function CurrentInvestments() {
     try {
       const dbPositions = getAllPositions();
       const snapshots: PositionSnapshot[] = [];
+      const settings = getSettings();
       
       let totalValue = 0;
       const positionValues: number[] = [];
@@ -95,9 +99,28 @@ export default function CurrentInvestments() {
         });
       }
       
-      // Calculate portfolio percentages
+      // Calculate portfolio percentages and risk metrics
       snapshots.forEach((snapshot, index) => {
         snapshot.portfolioPct = totalValue > 0 ? (positionValues[index] / totalValue) * 100 : 0;
+        
+        // Calculate risk for this position
+        const position = dbPositions.find(p => p.symbol === snapshot.symbol);
+        if (position) {
+          const risk = calculatePositionRisk(
+            position,
+            snapshot.last,
+            totalValue,
+            snapshot.atrPct > 0 ? (snapshot.last * snapshot.atrPct) / 100 : undefined,
+            settings.riskManagement.riskBasis
+          );
+          
+          snapshot.riskDollars = risk.riskDollars;
+          snapshot.riskPctOfPortfolio = risk.riskPctOfPortfolio;
+          
+          // Add risk flags
+          const riskFlags = getRiskFlags(risk, settings);
+          snapshot.flags = [...snapshot.flags, ...riskFlags];
+        }
       });
       
       setPositions(snapshots);
@@ -198,6 +221,8 @@ export default function CurrentInvestments() {
                   <th>Last</th>
                   <th>P/L $</th>
                   <th>P/L %</th>
+                  <th>Risk $</th>
+                  <th>Risk %</th>
                   <th>Trend</th>
                   <th>ATR%</th>
                   <th>Thesis</th>
@@ -213,7 +238,12 @@ export default function CurrentInvestments() {
                     className="cursor-pointer hover:bg-slate-800/50"
                     onClick={() => setSelectedSymbol(position.symbol)}
                   >
-                    <td className="font-semibold text-slate-100">{position.symbol}</td>
+                    <td className="font-semibold text-slate-100">
+                      <div className="flex items-center gap-2">
+                        {position.symbol}
+                        <DataQualityIndicator symbol={position.symbol} />
+                      </div>
+                    </td>
                     <td>{position.portfolioPct.toFixed(1)}%</td>
                     <td>{position.qty}</td>
                     <td>${position.avgCost.toFixed(2)}</td>
@@ -225,6 +255,16 @@ export default function CurrentInvestments() {
                     <td className={position.pnlPct >= 0 ? 'text-emerald-200' : 'text-rose-200'}>
                       {position.pnlPct >= 0 ? '+' : ''}
                       {position.pnlPct.toFixed(1)}%
+                    </td>
+                    <td className="text-slate-300">
+                      {position.riskDollars !== undefined 
+                        ? `$${position.riskDollars.toFixed(0)}` 
+                        : '—'}
+                    </td>
+                    <td className="text-slate-300">
+                      {position.riskPctOfPortfolio !== undefined 
+                        ? `${position.riskPctOfPortfolio.toFixed(2)}%` 
+                        : '—'}
                     </td>
                     <td className="text-xs">
                       {position.aboveSma50 ? '▲50D' : '▼50D'} / {position.aboveSma200 ? '▲200D' : '▼200D'}
