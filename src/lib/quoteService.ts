@@ -32,23 +32,35 @@ export async function fetchAndCacheQuote(symbol: string, forceRefresh = false): 
     }
   }
   
-  // Fetch fresh quote
-  const currentPrice = await fetchCurrentPrice(symbol);
-  
-  // Create quote object
-  const quote: Quote = {
-    symbol: currentPrice.symbol,
-    fetched_at: currentPrice.timestamp,
-    price: currentPrice.price,
-    change: currentPrice.change,
-    change_pct: currentPrice.changePercent,
-    source: currentPrice.source
-  };
-  
-  // Cache the quote
-  upsertQuote(quote);
-  
-  return quote;
+  try {
+    // Fetch fresh quote
+    const currentPrice = await fetchCurrentPrice(symbol);
+    
+    // Create quote object
+    const quote: Quote = {
+      symbol: currentPrice.symbol,
+      fetched_at: currentPrice.timestamp,
+      price: currentPrice.price,
+      change: currentPrice.change,
+      change_pct: currentPrice.changePercent,
+      source: currentPrice.source
+    };
+    
+    // Cache the quote
+    upsertQuote(quote);
+    
+    return quote;
+  } catch (error) {
+    // If fetch fails, try to return cached quote even if stale
+    const cachedQuote = getQuote(symbol);
+    if (cachedQuote) {
+      console.warn(`Using stale quote for ${symbol} due to fetch error:`, error);
+      return cachedQuote;
+    }
+    
+    // No cached quote available, re-throw the error
+    throw new Error(`Failed to fetch quote for ${symbol}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }
 
 /**

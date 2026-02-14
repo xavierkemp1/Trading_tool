@@ -24,6 +24,11 @@ export default function CurrentInvestments() {
   const [useLiveQuotes, setUseLiveQuotes] = useState(false);
   const [quoteStatus, setQuoteStatus] = useState<Map<string, boolean>>(new Map());
 
+  // Helper to check if a quote is stale
+  const isQuoteStale = useCallback((symbol: string): boolean => {
+    return useLiveQuotes && quoteStatus.has(symbol) && !quoteStatus.get(symbol);
+  }, [useLiveQuotes, quoteStatus]);
+
   const loadPositions = useCallback(async () => {
     setLoading(true);
     try {
@@ -297,7 +302,7 @@ export default function CurrentInvestments() {
                     <td>
                       <div className="flex items-center gap-1">
                         ${position.last.toFixed(2)}
-                        {useLiveQuotes && quoteStatus.has(position.symbol) && !quoteStatus.get(position.symbol) && (
+                        {isQuoteStale(position.symbol) && (
                           <span 
                             className="text-xs text-amber-400" 
                             title="Quote older than 60 seconds"
