@@ -5,6 +5,7 @@ import {
   getLatestPrice,
   getFundamentals,
   getPricesForSymbol,
+  getSymbol,
   type Price,
   type Fundamentals,
   type Symbol
@@ -466,9 +467,9 @@ async function fetchMassiveTickerDetails(symbol: string): Promise<APIResponse> {
 export async function fetchMarketData(symbol: string): Promise<MarketDataResult> {
   const upperSymbol = symbol.toUpperCase();
   
-  // Check cache first
-  const latestPrice = getLatestPrice(upperSymbol);
-  if (latestPrice && isCacheFresh(latestPrice.date, CACHE_DURATION_PRICES)) {
+  // Check cache first using last_price_update timestamp from symbols table
+  const symbolData = getSymbol(upperSymbol);
+  if (symbolData?.last_price_update && isCacheFresh(symbolData.last_price_update, CACHE_DURATION_PRICES)) {
     const cachedPrices = getPricesForSymbol(upperSymbol, 365);
     if (cachedPrices.length > 0) {
       return {
@@ -563,9 +564,31 @@ function validatePriceData(prices: Price[]): 'ok' | 'partial' | 'stale' {
   const hasVolume = prices.some(p => p.volume > 0);
   if (!hasVolume) return 'partial';
   
-  const latestDate = new Date(prices[prices.length - 1].date);
-  const daysSinceUpdate = (Date.now() - latestDate.getTime()) / (1000 * 60 * 60 * 24);
-  if (daysSinceUpdate > 2) return 'stale';
+  // Find the latest date in the array (don't assume last position is latest)
+  const latestDateStr = prices.reduce((max, p) => p.date > max ? p.date : max, prices[0].date);
+  const latestDate = new Date(latestDateStr);
+  const now = new Date();
+  const daysSinceUpdate = (now.getTime() - latestDate.getTime()) / (1000 * 60 * 60 * 24);
+  
+  // Trading-day-aware staleness check
+  const todayDayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const latestDayOfWeek = latestDate.getDay();
+  
+  // If more than 5 days old, always consider stale
+  if (daysSinceUpdate > 5) return 'stale';
+  
+  // If it's a weekend (Sat or Sun), don't flag as stale unless >5 days
+  if (todayDayOfWeek === 0 || todayDayOfWeek === 6) {
+    return 'ok';
+  }
+  
+  // If latest price is from Friday and today is Monday, that's OK (3 calendar days)
+  if (latestDayOfWeek === 5 && todayDayOfWeek === 1 && daysSinceUpdate <= 3) {
+    return 'ok';
+  }
+  
+  // For weekdays, flag as stale if more than 3 calendar days old
+  if (daysSinceUpdate > 3) return 'stale';
   
   return 'ok';
 }
@@ -874,12 +897,12 @@ export function getCacheStatus(symbol: string): {
 } {
   const upperSymbol = symbol.toUpperCase();
   
-  const latestPrice = getLatestPrice(upperSymbol);
+  const symbolData = getSymbol(upperSymbol);
   const fundamentals = getFundamentals(upperSymbol);
   
   return {
-    pricesCached: !!latestPrice,
-    pricesFresh: latestPrice ? isCacheFresh(latestPrice.date, CACHE_DURATION_PRICES) : false,
+    pricesCached: !!symbolData?.last_price_update,
+    pricesFresh: symbolData?.last_price_update ? isCacheFresh(symbolData.last_price_update, CACHE_DURATION_PRICES) : false,
     fundamentalsCached: !!fundamentals,
     fundamentalsFresh: fundamentals ? isCacheFresh(fundamentals.fetched_at, CACHE_DURATION_FUNDAMENTALS) : false
   };

@@ -65,7 +65,7 @@ export function getFlags(inputs: RuleInputs): string[] {
  * Generate risk-related flags based on position risk metrics
  * These flags help identify positions that violate risk management rules
  */
-export function getRiskFlags(risk: PositionRisk, settings: Settings): string[] {
+export function getRiskFlags(risk: PositionRisk, settings: Settings, invalidationPrice?: number | null): string[] {
   const flags: string[] = [];
   
   // Check if risk exceeds maximum allowed per position
@@ -74,8 +74,12 @@ export function getRiskFlags(risk: PositionRisk, settings: Settings): string[] {
   }
   
   // Flag positions without invalidation set
-  if (risk.riskPerShare === 0) {
+  // Only flag if invalidation was never set (null/undefined), not when it equals basis price
+  if (invalidationPrice === null || invalidationPrice === undefined) {
     flags.push('Invalidation missing');
+  } else if (risk.riskPerShare === 0 && invalidationPrice !== null && invalidationPrice !== undefined) {
+    // If invalidation is set but riskPerShare is 0, it means invalidation >= basis price (trailing stop)
+    flags.push('Stop above basis');
   }
   
   return flags;

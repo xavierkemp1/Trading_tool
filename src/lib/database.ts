@@ -5,7 +5,7 @@ import migration003 from './db/migrations/003_corporate_actions.sql';
 import { getDbBytes, setDbBytes, clearDbBytes, IDB_NAME, IDB_STORE } from './idbStore';
 
 const DB_KEY = 'trading_app_db'; // Keep for migration from localStorage
-const DB_VERSION = 3; // Updated to version 3 for corporate actions tracking.
+export const DB_VERSION = 3; // Updated to version 3 for corporate actions tracking.
 const MAX_FILE_PATH_LENGTH = 100; // Max length to distinguish file paths from SQL content
 const SAVE_DEBOUNCE_MS = 2000; // Debounce database saves by 2 seconds
 
@@ -136,6 +136,16 @@ function getDatabaseVersion(db: Database): number {
     return 0;
   }
   return 0;
+}
+
+/**
+ * Get current database version (public API)
+ */
+export function getCurrentDatabaseVersion(): number {
+  if (!dbInstance) {
+    return 0;
+  }
+  return getDatabaseVersion(dbInstance);
 }
 
 /**
