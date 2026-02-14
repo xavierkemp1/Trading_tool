@@ -3,11 +3,12 @@ import SectionHeader from '../components/SectionHeader';
 import PositionForm from '../components/PositionForm';
 import DataQualityIndicator from '../components/DataQualityIndicator';
 import CorporateActionWarning from '../components/CorporateActionWarning';
-import { getAllPositions, getLatestPrice, getFundamentals, deletePosition, getSymbol, type Position } from '../lib/db';
+import { getAllPositions, getLatestPrice, getFundamentals, deletePosition, getSymbol, getQuote, type Position } from '../lib/db';
 import { calculateIndicators } from '../lib/dataService';
 import { getActionBadge, getFlags, getRiskFlags, type RuleInputs } from '../lib/rules';
 import { calculatePositionRisk } from '../lib/riskMetrics';
 import { getSettings } from '../lib/settingsService';
+import { batchFetchQuotes, isQuoteFresh } from '../lib/quoteService';
 import type { PositionSnapshot } from '../lib/types';
 import defaultSettings from '../settings/defaultSettings.json';
 
@@ -20,6 +21,8 @@ export default function CurrentInvestments() {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewResult, setReviewResult] = useState<string | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [useLiveQuotes, setUseLiveQuotes] = useState(false);
+  const [quoteStatus, setQuoteStatus] = useState<Map<string, boolean>>(new Map());
 
   const loadPositions = useCallback(async () => {
     setLoading(true);
@@ -27,6 +30,26 @@ export default function CurrentInvestments() {
       const dbPositions = getAllPositions();
       const snapshots: PositionSnapshot[] = [];
       const settings = getSettings();
+      
+      // Fetch live quotes if enabled
+      let liveQuotes: Map<string, any> | null = null;
+      const freshQuoteMap = new Map<string, boolean>();
+      
+      if (useLiveQuotes && dbPositions.length > 0) {
+        try {
+          const symbols = dbPositions.map(p => p.symbol);
+          liveQuotes = await batchFetchQuotes(symbols);
+          
+          // Track which quotes are fresh
+          liveQuotes.forEach((quote, symbol) => {
+            freshQuoteMap.set(symbol, isQuoteFresh(quote));
+          });
+        } catch (error) {
+          console.error('Failed to fetch live quotes:', error);
+        }
+      }
+      
+      setQuoteStatus(freshQuoteMap);
       
       let totalValue = 0;
       const positionValues: number[] = [];
@@ -40,7 +63,16 @@ export default function CurrentInvestments() {
           continue;
         }
         
-        const currentValue = latestPrice.close * position.qty;
+        // Use live quote if available and enabled, otherwise use daily close
+        let currentPrice = latestPrice.close;
+        if (useLiveQuotes && liveQuotes) {
+          const quote = liveQuotes.get(position.symbol);
+          if (quote) {
+            currentPrice = quote.price;
+          }
+        }
+        
+        const currentValue = currentPrice * position.qty;
         totalValue += currentValue;
         positionValues.push(currentValue);
         
@@ -52,8 +84,8 @@ export default function CurrentInvestments() {
           continue;
         }
         
-        const pnl = (latestPrice.close - position.avg_cost) * position.qty;
-        const pnlPct = ((latestPrice.close - position.avg_cost) / position.avg_cost) * 100;
+        const pnl = (currentPrice - position.avg_cost) * position.qty;
+        const pnlPct = ((currentPrice - position.avg_cost) / position.avg_cost) * 100;
         
         const aboveSma50 = indicators.sma50 ? latestPrice.close > indicators.sma50 : false;
         const aboveSma200 = indicators.sma200 ? latestPrice.close > indicators.sma200 : false;
@@ -82,7 +114,7 @@ export default function CurrentInvestments() {
           name: symbolInfo?.name || position.symbol,
           qty: position.qty,
           avgCost: position.avg_cost,
-          last: latestPrice.close,
+          last: currentPrice,
           pnl,
           pnlPct,
           portfolioPct: 0, // Will calculate after we have total
@@ -133,7 +165,7 @@ export default function CurrentInvestments() {
     } finally {
       setLoading(false);
     }
-  }, [selectedSymbol]);
+  }, [selectedSymbol, useLiveQuotes]);
 
   useEffect(() => {
     loadPositions();
@@ -200,12 +232,25 @@ export default function CurrentInvestments() {
             title="Current Investments" 
             subtitle="Active positions and discipline checks"
             action={
-              <button
-                onClick={handleAddPosition}
-                className="rounded-lg bg-cyan-500 px-3 py-2 text-xs text-white hover:bg-cyan-600"
-              >
-                Add Position
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setUseLiveQuotes(!useLiveQuotes)}
+                  className={`rounded-lg px-3 py-2 text-xs ${
+                    useLiveQuotes 
+                      ? 'bg-emerald-500 text-white hover:bg-emerald-600' 
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  }`}
+                  title={useLiveQuotes ? 'Using live quotes (60s cache)' : 'Using daily close prices'}
+                >
+                  {useLiveQuotes ? '🔴 Live' : '📊 EOD'}
+                </button>
+                <button
+                  onClick={handleAddPosition}
+                  className="rounded-lg bg-cyan-500 px-3 py-2 text-xs text-white hover:bg-cyan-600"
+                >
+                  Add Position
+                </button>
+              </div>
             }
           />
           {loading ? (
@@ -249,7 +294,19 @@ export default function CurrentInvestments() {
                     <td>{position.portfolioPct.toFixed(1)}%</td>
                     <td>{position.qty}</td>
                     <td>${position.avgCost.toFixed(2)}</td>
-                    <td>${position.last.toFixed(2)}</td>
+                    <td>
+                      <div className="flex items-center gap-1">
+                        ${position.last.toFixed(2)}
+                        {useLiveQuotes && quoteStatus.has(position.symbol) && !quoteStatus.get(position.symbol) && (
+                          <span 
+                            className="text-xs text-amber-400" 
+                            title="Quote older than 60 seconds"
+                          >
+                            ⏱
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className={position.pnl >= 0 ? 'text-emerald-200' : 'text-rose-200'}>
                       {position.pnl >= 0 ? '+' : ''}
                       {position.pnl.toFixed(0)}
