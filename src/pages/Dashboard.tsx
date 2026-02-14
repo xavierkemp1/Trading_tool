@@ -10,6 +10,7 @@ import { exportDbBytes, exportJson, importDbBytes, importJson } from '../lib/exp
 import type { AlertItem, RegimeSummary } from '../lib/types';
 import defaultSettings from '../settings/defaultSettings.json';
 import { getSettings } from '../lib/settingsService';
+import { generateTodayQueue, type ActionItem } from '../lib/todayQueue';
 
 export default function Dashboard() {
   const { setLoading, setLastRefresh } = useApp();
@@ -163,6 +164,10 @@ export default function Dashboard() {
       // Update alerts with new portfolio-level warnings (still capped at 10)
       setAlerts(positionAlerts.slice(0, 10));
       
+      // Generate Today Queue
+      const queueItems = await generateTodayQueue(positions, totalValue);
+      setTodayQueue(queueItems);
+      
       // Calculate regime based on benchmarks
       const benchmarks = defaultSettings.benchmarks;
       let aboveSma200Count = 0;
@@ -278,6 +283,7 @@ export default function Dashboard() {
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [todayQueue, setTodayQueue] = useState<ActionItem[]>([]);
 
   const handleAIReview = async () => {
     setReviewLoading(true);
@@ -424,6 +430,94 @@ export default function Dashboard() {
                 <span>{refreshProgress.stage}</span>
               </span>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Today Queue - Prioritized Action List */}
+      {todayQueue.length > 0 && (
+        <div className="card">
+          <SectionHeader 
+            title="Today Queue" 
+            subtitle="Prioritized actions based on badges, flags, and risk data" 
+          />
+          <div className="mt-4 space-y-2">
+            {todayQueue.map((item) => {
+              const severityConfig = {
+                critical: { bg: 'bg-rose-500/10', border: 'border-rose-500/30', text: 'text-rose-200', badge: 'bg-rose-500/20 text-rose-200' },
+                high: { bg: 'bg-orange-500/10', border: 'border-orange-500/30', text: 'text-orange-200', badge: 'bg-orange-500/20 text-orange-200' },
+                medium: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-200', badge: 'bg-yellow-500/20 text-yellow-200' },
+                low: { bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', text: 'text-cyan-200', badge: 'bg-cyan-500/20 text-cyan-200' }
+              }[item.severity];
+
+              const handleRefreshSymbol = async () => {
+                setLoading(true);
+                try {
+                  await refreshAllData([item.symbol]);
+                  await loadData();
+                  setLastRefresh(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
+                } catch (err) {
+                  console.error('Refresh failed:', err);
+                } finally {
+                  setLoading(false);
+                }
+              };
+
+              return (
+                <div
+                  key={item.id}
+                  className={`rounded-lg border ${severityConfig.border} ${severityConfig.bg} p-3`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-semibold text-slate-100">{item.symbol}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded ${severityConfig.badge} uppercase font-medium`}>
+                          {item.severity}
+                        </span>
+                      </div>
+                      <p className={`text-sm ${severityConfig.text}`}>{item.message}</p>
+                    </div>
+                    <div className="flex gap-1">
+                      {item.actions.includes('edit') && (
+                        <button
+                          onClick={() => {
+                            // Navigate to Current Investments page where positions can be edited
+                            // For now, we'll just show an alert
+                            alert(`Edit ${item.symbol} - Navigate to Current Investments page to edit this position`);
+                          }}
+                          className="rounded px-2 py-1 text-xs border border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-slate-100 transition-colors"
+                          title="Edit position"
+                        >
+                          Edit
+                        </button>
+                      )}
+                      {item.actions.includes('journal') && (
+                        <button
+                          onClick={() => {
+                            // Navigate to Journal page to add a note
+                            alert(`Add note for ${item.symbol} - Navigate to Journal & AI Review page to add a note`);
+                          }}
+                          className="rounded px-2 py-1 text-xs border border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-slate-100 transition-colors"
+                          title="Add journal note"
+                        >
+                          Note
+                        </button>
+                      )}
+                      {item.actions.includes('refresh') && (
+                        <button
+                          onClick={handleRefreshSymbol}
+                          className="rounded px-2 py-1 text-xs border border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-slate-100 transition-colors"
+                          title="Refresh symbol data"
+                        >
+                          Refresh
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
