@@ -8,9 +8,19 @@ This document summarizes the implementation of real API integrations to replace 
 ### 1. Database Layer ✅
 - **File**: `src/lib/database.ts`
   - Browser-based SQLite using sql.js
-  - LocalStorage persistence
+  - IndexedDB persistence (migrated from localStorage)
   - Schema loaded from SQL migration files
   - Export/import functionality
+  - Automatic migration from legacy localStorage
+
+- **File**: `src/lib/idbStore.ts`
+  - IndexedDB storage layer for database persistence
+  - Direct Uint8Array storage (no base64 encoding)
+  - Better performance and larger quota (50-100MB+)
+
+- **File**: `src/lib/storageHealth.ts`
+  - Storage metrics and debugging utilities
+  - Database size reporting
 
 - **File**: `src/lib/dbOperations.ts`
   - Complete CRUD operations for all tables:

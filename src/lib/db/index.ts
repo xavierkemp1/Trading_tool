@@ -8,6 +8,12 @@ export {
   importDatabase
 } from '../database';
 
+// Export storage health utility
+export {
+  getStorageHealth,
+  type StorageHealth
+} from '../storageHealth';
+
 // Export all database operation functions
 export {
   // Types
