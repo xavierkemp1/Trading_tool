@@ -255,7 +255,7 @@ export default function JournalReview() {
                 <label className="block text-xs text-slate-400 mb-1">Type</label>
                 <select
                   value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value as 'trade' | 'note' | 'postmortem' })}
                   className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100"
                 >
                   <option value="trade">Trade</option>
@@ -494,7 +494,7 @@ export default function JournalReview() {
                 </div>
                 <div className="flex items-center gap-2">
                   {entry.r_multiple !== undefined && entry.r_multiple !== null ? (
-                    <span className={`text-sm font-semibold ${entry.r_multiple >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    <span className={`text-sm font-semibold ${entry.r_multiple > 0 ? 'text-emerald-400' : entry.r_multiple < 0 ? 'text-red-400' : 'text-slate-400'}`}>
                       {entry.r_multiple > 0 ? '+' : ''}{entry.r_multiple.toFixed(2)}R
                     </span>
                   ) : null}
