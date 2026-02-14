@@ -7,11 +7,20 @@
 
 import type { Position } from './dbOperations';
 import { getLatestPrice, getSymbol } from './db';
-import { calculateIndicators } from './dataService';
+import { calculateIndicators, type RefreshProgress } from './dataService';
 import { getActionBadge, getFlags, getRiskFlags, type RuleInputs } from './rules';
 import { checkDataFreshness, type DataFreshness } from './dataQuality';
 import { calculatePositionRisk } from './riskMetrics';
 import { getSettings } from './settingsService';
+
+interface CalculatedIndicators {
+  symbol: string;
+  sma50?: number;
+  sma200?: number;
+  atr14?: number;
+  rsi14?: number;
+  timestamp: string;
+}
 
 export type ActionSeverity = 'critical' | 'high' | 'medium' | 'low';
 
@@ -55,7 +64,7 @@ export async function generateTodayQueue(
     const freshness = checkDataFreshness(position.symbol);
     
     // Calculate indicators and risk
-    let indicators: any = null;
+    let indicators: CalculatedIndicators | null = null;
     let actionBadge: string = 'HOLD';
     let flags: string[] = [];
     let riskFlags: string[] = [];
