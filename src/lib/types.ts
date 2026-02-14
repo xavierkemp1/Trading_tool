@@ -68,4 +68,17 @@ export interface JournalEntry {
   thesis: string;
   lesson: string;
   outcome?: string;
+  entryPrice?: number;
+  exitPrice?: number;
+  qty?: number;
+  pnl?: number;
+  invalidation?: number;
+  plannedRiskPerShare?: number;
+  plannedRiskDollars?: number;
+  rMultiple?: number;
+  mfeR?: number;
+  maeR?: number;
+  holdingDays?: number;
+  setupTag?: string;
+  thesisTag?: ThesisTag;
 }

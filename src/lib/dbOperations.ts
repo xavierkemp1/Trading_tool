@@ -78,6 +78,14 @@ export interface JournalEntry {
   invalidation?: number;
   outcome?: string;
   lesson?: string;
+  planned_risk_per_share?: number;
+  planned_risk_dollars?: number;
+  r_multiple?: number;
+  mfe_r?: number;
+  mae_r?: number;
+  holding_days?: number;
+  setup_tag?: string;
+  thesis_tag?: string;
 }
 
 export interface AIReview {
@@ -434,9 +442,11 @@ export function addJournalEntry(entry: Omit<JournalEntry, 'id'>): number {
   const query = `
     INSERT INTO journal_entries (
       created_at, type, symbol, entry_price, exit_price, qty, pnl,
-      thesis, invalidation, outcome, lesson
+      thesis, invalidation, outcome, lesson,
+      planned_risk_per_share, planned_risk_dollars, r_multiple,
+      mfe_r, mae_r, holding_days, setup_tag, thesis_tag
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
   
   const db = getDatabase();
@@ -451,7 +461,15 @@ export function addJournalEntry(entry: Omit<JournalEntry, 'id'>): number {
     entry.thesis || null,
     entry.invalidation || null,
     entry.outcome || null,
-    entry.lesson || null
+    entry.lesson || null,
+    entry.planned_risk_per_share || null,
+    entry.planned_risk_dollars || null,
+    entry.r_multiple || null,
+    entry.mfe_r || null,
+    entry.mae_r || null,
+    entry.holding_days || null,
+    entry.setup_tag || null,
+    entry.thesis_tag || null
   ]);
   
   // Get the last inserted ID
@@ -487,7 +505,9 @@ export function updateJournalEntry(id: number, updates: Partial<Omit<JournalEntr
   // Validate field names against allowlist
   const allowedFields = new Set([
     'created_at', 'type', 'symbol', 'entry_price', 'exit_price',
-    'qty', 'pnl', 'thesis', 'invalidation', 'outcome', 'lesson'
+    'qty', 'pnl', 'thesis', 'invalidation', 'outcome', 'lesson',
+    'planned_risk_per_share', 'planned_risk_dollars', 'r_multiple',
+    'mfe_r', 'mae_r', 'holding_days', 'setup_tag', 'thesis_tag'
   ]);
   
   const fields: string[] = [];
