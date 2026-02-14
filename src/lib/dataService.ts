@@ -797,12 +797,8 @@ export async function refreshAllData(
   // Run with concurrency of 4 to balance speed and rate limits
   const { results, errors } = await runWithConcurrency(
     tasks,
-    4,
-    (poolProgress) => {
-      // We're using the onProgress callback per symbol above,
-      // so we don't need to do additional reporting here
-      // This just tracks overall pool progress
-    }
+    4
+    // Pool progress is tracked via individual symbol callbacks above
   );
   
   // Collect results

@@ -117,16 +117,11 @@ export async function generatePositionReview(symbol: string): Promise<string> {
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Unknown error' }));
     
-    // Provide helpful error message if server is not running
-    if (response.status === 404 || !response.ok) {
-      throw new Error(
-        `Proxy server error: ${error.error || response.statusText}. ` +
-        `Make sure the proxy server is running on ${proxyUrl}. ` +
-        `Run 'npm run server' in a separate terminal.`
-      );
-    }
-    
-    throw new Error(`AI Review error: ${error.error || response.statusText}`);
+    throw new Error(
+      `Proxy server error: ${error.error || response.statusText}. ` +
+      `Make sure the proxy server is running on ${proxyUrl}. ` +
+      `Run 'npm run server' in a separate terminal.`
+    );
   }
   
   const result = await response.json();
@@ -233,16 +228,11 @@ export async function generatePortfolioReview(): Promise<string> {
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Unknown error' }));
     
-    // Provide helpful error message if server is not running
-    if (response.status === 404 || !response.ok) {
-      throw new Error(
-        `Proxy server error: ${error.error || response.statusText}. ` +
-        `Make sure the proxy server is running on ${proxyUrl}. ` +
-        `Run 'npm run server' in a separate terminal.`
-      );
-    }
-    
-    throw new Error(`AI Review error: ${error.error || response.statusText}`);
+    throw new Error(
+      `Proxy server error: ${error.error || response.statusText}. ` +
+      `Make sure the proxy server is running on ${proxyUrl}. ` +
+      `Run 'npm run server' in a separate terminal.`
+    );
   }
   
   const result = await response.json();

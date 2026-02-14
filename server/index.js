@@ -457,5 +457,3 @@ app.listen(PORT, () => {
   console.log(`   - POST /api/ai/portfolio-review`);
   console.log(`   - POST /api/ai/analyze`);
 });
-  console.log(`   - GET /api/twitter (not yet implemented)`);
-});
