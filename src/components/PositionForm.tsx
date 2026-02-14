@@ -1,7 +1,8 @@
 import { useState, FormEvent, useEffect, useRef } from 'react';
-import { addPosition, updatePosition, getAllPositions, getAllWatchlist, type Position } from '../lib/db';
+import { addPosition, updatePosition, getAllPositions, getAllWatchlist, getLatestPrice, type Position } from '../lib/db';
 import { fetchCurrentPrice } from '../lib/dataService';
 import type { ThesisTag, TimeHorizon } from '../lib/types';
+import { getSettings } from '../lib/settingsService';
 
 interface PositionFormProps {
   position?: Position;
@@ -13,6 +14,7 @@ const thesisTags: ThesisTag[] = ['Energy', 'Defense', 'Growth', 'Hedge', 'Spec',
 const timeHorizons: TimeHorizon[] = ['Days', 'Weeks', 'Months', 'Years'];
 
 export default function PositionForm({ position, onSave, onCancel }: PositionFormProps) {
+  const settings = getSettings();
   const [formData, setFormData] = useState({
     symbol: position?.symbol || '',
     qty: position?.qty || 0,
@@ -22,12 +24,38 @@ export default function PositionForm({ position, onSave, onCancel }: PositionFor
     timeHorizon: position?.time_horizon || 'Months' as TimeHorizon,
     thesis: position?.thesis || '',
     invalidation: position?.invalidation || undefined as number | undefined,
-    target: position?.target || undefined as number | undefined
+    target: position?.target || undefined as number | undefined,
+    riskPct: settings.riskManagement.maxRiskPctPerPosition
   });
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validatingSymbol, setValidatingSymbol] = useState(false);
+  
+  // Calculate portfolio value
+  const portfolioValue = getAllPositions().reduce((total, pos) => {
+    const latestPrice = getLatestPrice(pos.symbol);
+    if (latestPrice) {
+      return total + (latestPrice.close * pos.qty);
+    }
+    return total;
+  }, 0);
+
+  // Calculate risk metrics
+  const riskPerShare = formData.avgCost && formData.invalidation 
+    ? formData.avgCost - formData.invalidation 
+    : 0;
+  const maxRiskDollars = portfolioValue * (formData.riskPct / 100);
+  const recommendedQty = riskPerShare > 0 ? Math.floor(maxRiskDollars / riskPerShare) : 0;
+  const recommendedPositionValue = recommendedQty * formData.avgCost;
+  const recommendedPositionPct = portfolioValue > 0 ? (recommendedPositionValue / portfolioValue) * 100 : 0;
+  const currentPositionValue = formData.qty * formData.avgCost;
+  const currentPositionPct = portfolioValue > 0 ? (currentPositionValue / portfolioValue) * 100 : 0;
+  
+  // Validation checks
+  const hasInvalidation = formData.invalidation !== undefined && formData.invalidation > 0;
+  const hasValidRiskPerShare = riskPerShare > 0;
+  const canCalculateRisk = hasInvalidation && hasValidRiskPerShare;
   
   // Autocomplete state
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -355,6 +383,109 @@ export default function PositionForm({ position, onSave, onCancel }: PositionFor
                   placeholder="200.00"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Risk Management Section */}
+          <div className="mt-8">
+            <h3 className="mb-3 text-sm font-medium text-slate-300">Risk Management</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs uppercase text-slate-400">Risk % for this trade</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={formData.riskPct || ''}
+                  onChange={(e) => setFormData({ ...formData, riskPct: parseFloat(e.target.value) || 0 })}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                  placeholder="1.0"
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Default from settings: {settings.riskManagement.maxRiskPctPerPosition}%
+                </p>
+              </div>
+
+              {/* Risk Calculations */}
+              {formData.avgCost > 0 && (
+                <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 space-y-3">
+                  <h4 className="text-xs font-semibold text-slate-300 uppercase">Calculated Values</h4>
+                  
+                  {!hasInvalidation && (
+                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                      ⚠️ Set invalidation price to calculate risk-based position sizing
+                    </div>
+                  )}
+                  
+                  {hasInvalidation && !hasValidRiskPerShare && (
+                    <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+                      ⚠️ Invalidation must be below entry price (avg cost) for long positions
+                    </div>
+                  )}
+                  
+                  <div className="grid gap-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Portfolio Value:</span>
+                      <span className="font-medium text-slate-100">
+                        ${portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Risk per Share:</span>
+                      <span className="font-medium text-slate-100">
+                        ${riskPerShare.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Max Risk ($):</span>
+                      <span className="font-medium text-slate-100">
+                        ${maxRiskDollars.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    
+                    {canCalculateRisk && (
+                      <>
+                        <div className="border-t border-slate-700 my-2"></div>
+                        <div className="flex justify-between">
+                          <span className="text-cyan-400 font-semibold">Recommended Qty:</span>
+                          <span className="font-bold text-cyan-300">
+                            {recommendedQty.toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Recommended Position $:</span>
+                          <span className="font-medium text-slate-100">
+                            ${recommendedPositionValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Recommended % of Portfolio:</span>
+                          <span className="font-medium text-slate-100">
+                            {recommendedPositionPct.toFixed(2)}%
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    
+                    {formData.qty > 0 && (
+                      <>
+                        <div className="border-t border-slate-700 my-2"></div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Current Position $:</span>
+                          <span className="font-medium text-slate-100">
+                            ${currentPositionValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Current % of Portfolio:</span>
+                          <span className="font-medium text-slate-100">
+                            {currentPositionPct.toFixed(2)}%
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
