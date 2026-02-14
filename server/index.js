@@ -7,6 +7,9 @@ const PORT = process.env.PORT || 3001;
 // Enable CORS for all origins in development
 app.use(cors());
 
+// Enable JSON body parsing for POST requests
+app.use(express.json({ limit: '10mb' }));
+
 // Rate limiting: Track last request time and enforce minimum delay
 const MIN_REQUEST_DELAY_MS = 500; // Minimum 500ms between requests
 let lastRequestTime = 0;
@@ -233,6 +236,214 @@ app.get('/api/twitter', throttleMiddleware, async (req, res) => {
   });
 });
 
+// ============= OPENAI API ENDPOINTS (SECURE) =============
+
+/**
+ * POST /api/ai/position-review
+ * Generate AI review for a single position
+ * Body: { positionData: object, model: string }
+ */
+app.post('/api/ai/position-review', async (req, res) => {
+  const apiKey = process.env.OPENAI_API_KEY;
+  
+  if (!apiKey) {
+    return res.status(500).json({ 
+      error: 'OpenAI API key not configured on server. Set OPENAI_API_KEY environment variable.' 
+    });
+  }
+  
+  const { positionData, systemPrompt, model = 'gpt-4o-mini' } = req.body;
+  
+  if (!positionData || !systemPrompt) {
+    return res.status(400).json({ 
+      error: 'Missing required fields: positionData and systemPrompt' 
+    });
+  }
+  
+  try {
+    const inputJson = JSON.stringify(positionData, null, 2);
+    
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: systemPrompt
+          },
+          {
+            role: 'user',
+            content: inputJson
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1500
+      })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+      return res.status(response.status).json({ 
+        error: `OpenAI API error: ${error.error?.message || response.statusText}` 
+      });
+    }
+    
+    const result = await response.json();
+    const outputMd = result.choices?.[0]?.message?.content || '';
+    
+    if (!outputMd) {
+      return res.status(500).json({ error: 'Empty response from OpenAI API' });
+    }
+    
+    res.json({ result: outputMd });
+  } catch (error) {
+    console.error('Error calling OpenAI API:', error);
+    res.status(500).json({ 
+      error: error.message || 'Failed to generate position review' 
+    });
+  }
+});
+
+/**
+ * POST /api/ai/portfolio-review
+ * Generate AI review for entire portfolio
+ * Body: { portfolioData: object, model: string }
+ */
+app.post('/api/ai/portfolio-review', async (req, res) => {
+  const apiKey = process.env.OPENAI_API_KEY;
+  
+  if (!apiKey) {
+    return res.status(500).json({ 
+      error: 'OpenAI API key not configured on server. Set OPENAI_API_KEY environment variable.' 
+    });
+  }
+  
+  const { portfolioData, systemPrompt, model = 'gpt-4o-mini' } = req.body;
+  
+  if (!portfolioData || !systemPrompt) {
+    return res.status(400).json({ 
+      error: 'Missing required fields: portfolioData and systemPrompt' 
+    });
+  }
+  
+  try {
+    const inputJson = JSON.stringify(portfolioData, null, 2);
+    
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: systemPrompt
+          },
+          {
+            role: 'user',
+            content: inputJson
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000
+      })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+      return res.status(response.status).json({ 
+        error: `OpenAI API error: ${error.error?.message || response.statusText}` 
+      });
+    }
+    
+    const result = await response.json();
+    const outputMd = result.choices?.[0]?.message?.content || '';
+    
+    if (!outputMd) {
+      return res.status(500).json({ error: 'Empty response from OpenAI API' });
+    }
+    
+    res.json({ result: outputMd });
+  } catch (error) {
+    console.error('Error calling OpenAI API:', error);
+    res.status(500).json({ 
+      error: error.message || 'Failed to generate portfolio review' 
+    });
+  }
+});
+
+/**
+ * POST /api/ai/analyze
+ * Generic OpenAI analysis endpoint
+ * Body: { systemPrompt: string, userPrompt: string, model: string }
+ */
+app.post('/api/ai/analyze', async (req, res) => {
+  const apiKey = process.env.OPENAI_API_KEY;
+  
+  if (!apiKey) {
+    return res.status(500).json({ 
+      error: 'OpenAI API key not configured on server. Set OPENAI_API_KEY environment variable.' 
+    });
+  }
+  
+  const { systemPrompt, userPrompt, model = 'gpt-4o-mini', maxTokens = 2000 } = req.body;
+  
+  if (!userPrompt) {
+    return res.status(400).json({ 
+      error: 'Missing required field: userPrompt' 
+    });
+  }
+  
+  try {
+    const messages = systemPrompt 
+      ? [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }]
+      : [{ role: 'user', content: userPrompt }];
+    
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: 0.7,
+        max_tokens: maxTokens
+      })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+      return res.status(response.status).json({ 
+        error: `OpenAI API error: ${error.error?.message || response.statusText}` 
+      });
+    }
+    
+    const result = await response.json();
+    const outputMd = result.choices?.[0]?.message?.content || '';
+    
+    if (!outputMd) {
+      return res.status(500).json({ error: 'Empty response from OpenAI API' });
+    }
+    
+    res.json({ result: outputMd });
+  } catch (error) {
+    console.error('Error calling OpenAI API:', error);
+    res.status(500).json({ 
+      error: error.message || 'Failed to analyze content' 
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`✅ Proxy server running on http://localhost:${PORT}`);
   console.log(`📊 Endpoints:`);
@@ -241,5 +452,10 @@ app.listen(PORT, () => {
   console.log(`   - GET /api/quote/:symbol?interval=X&range=Y`);
   console.log(`   - GET /api/reddit?subreddit=X&sort=Y&limit=Z`);
   console.log(`   - GET /api/reddit/post?subreddit=X&postId=Y`);
+  console.log(`   - GET /api/twitter (not yet implemented)`);
+  console.log(`   - POST /api/ai/position-review`);
+  console.log(`   - POST /api/ai/portfolio-review`);
+  console.log(`   - POST /api/ai/analyze`);
+});
   console.log(`   - GET /api/twitter (not yet implemented)`);
 });

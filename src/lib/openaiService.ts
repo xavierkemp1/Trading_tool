@@ -3,6 +3,13 @@ import { calculateIndicators } from './dataService';
 import { positionReviewPrompt, portfolioWeeklyReviewPrompt } from './aiPrompts';
 import { getSettings } from './settingsService';
 
+/**
+ * Get the proxy URL from environment or default
+ */
+function getProxyUrl(): string {
+  return import.meta.env.VITE_PROXY_URL || 'http://localhost:3001';
+}
+
 interface PositionData {
   symbol: string;
   qty: number;
@@ -41,12 +48,6 @@ export async function generatePositionReview(symbol: string): Promise<string> {
   
   if (!settings.openai.enabled) {
     throw new Error('OpenAI integration is disabled in settings');
-  }
-  
-  // Note: API key is exposed in client-side code. For production, use a backend proxy.
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('OpenAI API key not configured. Set VITE_OPENAI_API_KEY in your environment.');
   }
   
   // Get position data
@@ -99,40 +100,40 @@ export async function generatePositionReview(symbol: string): Promise<string> {
   
   const inputJson = JSON.stringify(positionData, null, 2);
   
-  // Call OpenAI API
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  // Call proxy server instead of OpenAI directly
+  const proxyUrl = getProxyUrl();
+  const response = await fetch(`${proxyUrl}/api/ai/position-review`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: settings.openai.model,
-      messages: [
-        {
-          role: 'system',
-          content: positionReviewPrompt
-        },
-        {
-          role: 'user',
-          content: inputJson
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 1500
+      positionData,
+      systemPrompt: positionReviewPrompt,
+      model: settings.openai.model
     })
   });
   
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
-    throw new Error(`OpenAI API error: ${error.error?.message || response.statusText}`);
+    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+    
+    // Provide helpful error message if server is not running
+    if (response.status === 404 || !response.ok) {
+      throw new Error(
+        `Proxy server error: ${error.error || response.statusText}. ` +
+        `Make sure the proxy server is running on ${proxyUrl}. ` +
+        `Run 'npm run server' in a separate terminal.`
+      );
+    }
+    
+    throw new Error(`AI Review error: ${error.error || response.statusText}`);
   }
   
   const result = await response.json();
-  const outputMd = result.choices?.[0]?.message?.content || '';
+  const outputMd = result.result || '';
   
   if (!outputMd) {
-    throw new Error('Empty response from OpenAI API');
+    throw new Error('Empty response from AI service');
   }
   
   // Store in database
@@ -152,12 +153,6 @@ export async function generatePortfolioReview(): Promise<string> {
   
   if (!settings.openai.enabled) {
     throw new Error('OpenAI integration is disabled in settings');
-  }
-  
-  // Note: API key is exposed in client-side code. For production, use a backend proxy.
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('OpenAI API key not configured. Set VITE_OPENAI_API_KEY in your environment.');
   }
   
   // Get all positions
@@ -221,40 +216,40 @@ export async function generatePortfolioReview(): Promise<string> {
   
   const inputJson = JSON.stringify(portfolioData, null, 2);
   
-  // Call OpenAI API
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  // Call proxy server instead of OpenAI directly
+  const proxyUrl = getProxyUrl();
+  const response = await fetch(`${proxyUrl}/api/ai/portfolio-review`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: settings.openai.model,
-      messages: [
-        {
-          role: 'system',
-          content: portfolioWeeklyReviewPrompt
-        },
-        {
-          role: 'user',
-          content: inputJson
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 2000
+      portfolioData,
+      systemPrompt: portfolioWeeklyReviewPrompt,
+      model: settings.openai.model
     })
   });
   
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
-    throw new Error(`OpenAI API error: ${error.error?.message || response.statusText}`);
+    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+    
+    // Provide helpful error message if server is not running
+    if (response.status === 404 || !response.ok) {
+      throw new Error(
+        `Proxy server error: ${error.error || response.statusText}. ` +
+        `Make sure the proxy server is running on ${proxyUrl}. ` +
+        `Run 'npm run server' in a separate terminal.`
+      );
+    }
+    
+    throw new Error(`AI Review error: ${error.error || response.statusText}`);
   }
   
   const result = await response.json();
-  const outputMd = result.choices?.[0]?.message?.content || '';
+  const outputMd = result.result || '';
   
   if (!outputMd) {
-    throw new Error('Empty response from OpenAI API');
+    throw new Error('Empty response from AI service');
   }
   
   // Store in database
@@ -283,11 +278,6 @@ export async function analyzeFileContent(
   if (!settings.openai.enabled) {
     throw new Error('OpenAI integration is disabled in settings');
   }
-  
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('OpenAI API key not configured. Set VITE_OPENAI_API_KEY in your environment.');
-  }
 
   const systemPrompt = `You are a financial analyst AI assistant specialized in analyzing stock-related documents and materials.
 Your task is to:
@@ -311,40 +301,41 @@ Provide a detailed analysis including:
 - Opportunities identified
 - Your conclusion and recommendation`;
 
-  // Call OpenAI API
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  // Call proxy server instead of OpenAI directly
+  const proxyUrl = getProxyUrl();
+  const response = await fetch(`${proxyUrl}/api/ai/analyze`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
+      systemPrompt,
+      userPrompt,
       model: settings.openai.model,
-      messages: [
-        {
-          role: 'system',
-          content: systemPrompt
-        },
-        {
-          role: 'user',
-          content: userPrompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 2000
+      maxTokens: 2000
     })
   });
   
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
-    throw new Error(`OpenAI API error: ${error.error?.message || response.statusText}`);
+    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+    
+    // Provide helpful error message if server is not running
+    if (response.status === 404 || !response.ok) {
+      throw new Error(
+        `Proxy server error: ${error.error || response.statusText}. ` +
+        `Make sure the proxy server is running on ${proxyUrl}. ` +
+        `Run 'npm run server' in a separate terminal.`
+      );
+    }
+    
+    throw new Error(`AI Analysis error: ${error.error || response.statusText}`);
   }
   
   const result = await response.json();
-  const outputMd = result.choices?.[0]?.message?.content || '';
+  const outputMd = result.result || '';
   
   if (!outputMd) {
-    throw new Error('Empty response from OpenAI API');
+    throw new Error('Empty response from AI service');
   }
 
   // Store in database
@@ -381,11 +372,6 @@ export async function analyzeRedditPost(
   if (!settings.openai.enabled) {
     throw new Error('OpenAI integration is disabled in settings');
   }
-  
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('OpenAI API key not configured. Set VITE_OPENAI_API_KEY in your environment.');
-  }
 
   const systemPrompt = `You are a financial analyst AI assistant specialized in analyzing Reddit stock discussion posts and due diligence (DD) reports.
 Your task is to:
@@ -415,40 +401,41 @@ Provide a comprehensive analysis including:
 - Overall credibility score (1-10)
 - Your conclusion: Is this analysis worth considering?`;
 
-  // Call OpenAI API
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  // Call proxy server instead of OpenAI directly
+  const proxyUrl = getProxyUrl();
+  const response = await fetch(`${proxyUrl}/api/ai/analyze`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
+      systemPrompt,
+      userPrompt,
       model: settings.openai.model,
-      messages: [
-        {
-          role: 'system',
-          content: systemPrompt
-        },
-        {
-          role: 'user',
-          content: userPrompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 2500
+      maxTokens: 2500
     })
   });
   
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
-    throw new Error(`OpenAI API error: ${error.error?.message || response.statusText}`);
+    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+    
+    // Provide helpful error message if server is not running
+    if (response.status === 404 || !response.ok) {
+      throw new Error(
+        `Proxy server error: ${error.error || response.statusText}. ` +
+        `Make sure the proxy server is running on ${proxyUrl}. ` +
+        `Run 'npm run server' in a separate terminal.`
+      );
+    }
+    
+    throw new Error(`AI Analysis error: ${error.error || response.statusText}`);
   }
   
   const result = await response.json();
-  const outputMd = result.choices?.[0]?.message?.content || '';
+  const outputMd = result.result || '';
   
   if (!outputMd) {
-    throw new Error('Empty response from OpenAI API');
+    throw new Error('Empty response from AI service');
   }
 
   // Store in database
@@ -481,40 +468,40 @@ export async function analyzeWithOpenAI(prompt: string): Promise<string> {
     throw new Error('OpenAI integration is disabled in settings');
   }
   
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('OpenAI API key not configured. Set VITE_OPENAI_API_KEY in your environment.');
-  }
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  // Call proxy server instead of OpenAI directly
+  const proxyUrl = getProxyUrl();
+  const response = await fetch(`${proxyUrl}/api/ai/analyze`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
+      userPrompt: prompt,
       model: settings.openai.model,
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 2000
+      maxTokens: 2000
     })
   });
   
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
-    throw new Error(`OpenAI API error: ${error.error?.message || response.statusText}`);
+    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+    
+    // Provide helpful error message if server is not running
+    if (response.status === 404 || !response.ok) {
+      throw new Error(
+        `Proxy server error: ${error.error || response.statusText}. ` +
+        `Make sure the proxy server is running on ${proxyUrl}. ` +
+        `Run 'npm run server' in a separate terminal.`
+      );
+    }
+    
+    throw new Error(`AI Analysis error: ${error.error || response.statusText}`);
   }
   
   const result = await response.json();
-  const outputMd = result.choices?.[0]?.message?.content || '';
+  const outputMd = result.result || '';
   
   if (!outputMd) {
-    throw new Error('Empty response from OpenAI API');
+    throw new Error('Empty response from AI service');
   }
   
   return outputMd;
