@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import SectionHeader from '../components/SectionHeader';
 import PositionForm from '../components/PositionForm';
 import DataQualityIndicator from '../components/DataQualityIndicator';
+import CorporateActionWarning from '../components/CorporateActionWarning';
 import { getAllPositions, getLatestPrice, getFundamentals, deletePosition, getSymbol, type Position } from '../lib/db';
 import { calculateIndicators } from '../lib/dataService';
 import { getActionBadge, getFlags, getRiskFlags, type RuleInputs } from '../lib/rules';
@@ -181,6 +182,7 @@ export default function CurrentInvestments() {
 
   const selected = positions.find(p => p.symbol === selectedSymbol);
   const fundamentals = selectedSymbol ? getFundamentals(selectedSymbol) : null;
+  const symbolInfo = selectedSymbol ? getSymbol(selectedSymbol) : null;
 
   return (
     <>
@@ -302,6 +304,14 @@ export default function CurrentInvestments() {
 
         {selected && (
           <div className="flex flex-col gap-6">
+            {/* Corporate Action Warning */}
+            {symbolInfo?.corporate_action_warning && (
+              <CorporateActionWarning 
+                warning={symbolInfo.corporate_action_warning}
+                createdAt={symbolInfo.warning_created_at}
+              />
+            )}
+            
             <div className="card">
               <SectionHeader title={`${selected.symbol} detail`} subtitle="Last 6 months with SMA50/200" />
               <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-400">

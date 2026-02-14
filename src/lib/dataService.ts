@@ -9,7 +9,9 @@ import {
   type Fundamentals,
   type Symbol
 } from './db';
-import { simpleMovingAverage, atr14, rsi14 } from './indicators';
+import { simpleMovingAverage, wilderAtr, wilderRsi } from './indicators';
+import { runWithConcurrency, type PoolTask } from './concurrency';
+import { detectStockSplit, formatCorporateActionWarning } from './corporateActions';
 
 // ============= TYPE DEFINITIONS =============
 
@@ -51,6 +53,15 @@ interface CalculatedIndicators {
   rsi14?: number;
   timestamp: string;
 }
+
+export interface RefreshProgress {
+  symbol: string;
+  stage: 'queued' | 'fetching_prices' | 'fetching_fundamentals' | 'success' | 'failed';
+  status?: string;
+  error?: string;
+}
+
+export type RefreshProgressCallback = (progress: RefreshProgress) => void;
 
 interface RateLimitTracker {
   [key: string]: {
@@ -501,11 +512,15 @@ export async function fetchMarketData(symbol: string): Promise<MarketDataResult>
     // Validate data quality
     const quality = validatePriceData(prices);
     
+    // Check for corporate actions (splits)
+    const splitDetection = detectStockSplit(prices);
+    const corporateActionWarning = formatCorporateActionWarning(splitDetection);
+    
     // Store in database
     if (prices.length > 0) {
       addPrices(prices);
       
-      // Update symbol metadata with data quality tracking
+      // Update symbol metadata with data quality tracking and corporate action warnings
       upsertSymbol({
         symbol: upperSymbol,
         name: meta?.longName || meta?.shortName,
@@ -513,7 +528,9 @@ export async function fetchMarketData(symbol: string): Promise<MarketDataResult>
         asset_class: 'stock',
         last_price_update: new Date().toISOString(),
         data_quality: quality,
-        last_error: null
+        last_error: null,
+        corporate_action_warning: corporateActionWarning,
+        warning_created_at: corporateActionWarning ? new Date().toISOString() : null
       });
     }
     
@@ -697,40 +714,102 @@ export async function fetchCurrentPrice(symbol: string): Promise<CurrentPriceRes
 }
 
 /**
- * Refresh data for multiple symbols in batch
+ * Refresh data for a single symbol (both prices and fundamentals)
  */
-export async function refreshAllData(symbols: string[]): Promise<{
-  successful: string[];
-  failed: { symbol: string; error: string }[];
-}> {
-  const successful: string[] = [];
-  const failed: { symbol: string; error: string }[] = [];
+async function refreshSymbolData(symbol: string, onProgress?: RefreshProgressCallback): Promise<void> {
+  const upperSymbol = symbol.toUpperCase();
   
-  for (const symbol of symbols) {
+  try {
+    // Report queued state
+    onProgress?.({
+      symbol: upperSymbol,
+      stage: 'queued',
+      status: 'Starting refresh'
+    });
+    
+    // Fetch market data
+    onProgress?.({
+      symbol: upperSymbol,
+      stage: 'fetching_prices',
+      status: 'Fetching price data'
+    });
+    
+    await fetchMarketData(upperSymbol);
+    
+    // Add small delay to avoid overwhelming APIs
+    await new Promise(resolve => setTimeout(resolve, API_DELAY_MS));
+    
+    // Fetch fundamentals (optional, don't fail if it errors)
+    onProgress?.({
+      symbol: upperSymbol,
+      stage: 'fetching_fundamentals',
+      status: 'Fetching fundamentals'
+    });
+    
     try {
-      // Fetch both market data and fundamentals
-      await fetchMarketData(symbol);
-      
-      // Add small delay to avoid overwhelming APIs
-      await new Promise(resolve => setTimeout(resolve, API_DELAY_MS));
-      
-      try {
-        await fetchFundamentals(symbol);
-      } catch (error) {
-        // Fundamentals are optional, don't fail the whole symbol
-        console.warn(`Failed to fetch fundamentals for ${symbol}:`, error);
-      }
-      
-      successful.push(symbol);
+      await fetchFundamentals(upperSymbol);
     } catch (error) {
-      failed.push({
-        symbol,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      // Fundamentals are optional, don't fail the whole symbol
+      console.warn(`Failed to fetch fundamentals for ${upperSymbol}:`, error);
     }
     
-    // Add delay between symbols
-    await new Promise(resolve => setTimeout(resolve, SYMBOL_DELAY_MS));
+    // Success
+    onProgress?.({
+      symbol: upperSymbol,
+      stage: 'success',
+      status: 'Completed'
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    onProgress?.({
+      symbol: upperSymbol,
+      stage: 'failed',
+      status: 'Failed',
+      error: errorMessage
+    });
+    throw error;
+  }
+}
+
+/**
+ * Refresh data for multiple symbols using concurrency pool
+ * This respects rate limits while processing multiple symbols in parallel
+ */
+export async function refreshAllData(
+  symbols: string[],
+  onProgress?: RefreshProgressCallback
+): Promise<{
+  successful: string[];
+  failed: Array<{ symbol: string; error: string }>;
+}> {
+  const successful: string[] = [];
+  const failed: Array<{ symbol: string; error: string }> = [];
+  
+  // Create tasks for each symbol
+  const tasks: PoolTask<string>[] = symbols.map(symbol => ({
+    id: symbol.toUpperCase(),
+    execute: async () => {
+      await refreshSymbolData(symbol, onProgress);
+      return symbol.toUpperCase();
+    }
+  }));
+  
+  // Run with concurrency of 4 to balance speed and rate limits
+  const { results, errors } = await runWithConcurrency(
+    tasks,
+    4
+    // Pool progress is tracked via individual symbol callbacks above
+  );
+  
+  // Collect results
+  successful.push(...results);
+  
+  // Collect errors
+  for (const error of errors) {
+    failed.push({
+      symbol: error.id,
+      error: error.error instanceof Error ? error.error.message : String(error.error)
+    });
   }
   
   return { successful, failed };
@@ -771,14 +850,14 @@ export async function calculateIndicators(symbol: string): Promise<CalculatedInd
     indicators.sma200 = simpleMovingAverage(closes, 200);
   }
   
-  // Calculate ATR14
+  // Calculate ATR14 using Wilder's smoothing
   if (highs.length >= 15 && lows.length >= 15 && closes.length >= 15) {
-    indicators.atr14 = atr14(highs, lows, closes);
+    indicators.atr14 = wilderAtr(highs, lows, closes, 14);
   }
   
-  // Calculate RSI14
+  // Calculate RSI14 using Wilder's smoothing
   if (closes.length >= 15) {
-    indicators.rsi14 = rsi14(closes);
+    indicators.rsi14 = wilderRsi(closes, 14);
   }
   
   return indicators;

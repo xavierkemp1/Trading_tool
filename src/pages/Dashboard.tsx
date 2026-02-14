@@ -4,7 +4,7 @@ import StatPill from '../components/StatPill';
 import IndustryPieChart from '../components/IndustryPieChart';
 import { useApp } from '../lib/AppContext';
 import { getAllPositions, getLatestPrice, getSymbol } from '../lib/db';
-import { refreshAllData, calculateIndicators } from '../lib/dataService';
+import { refreshAllData, calculateIndicators, type RefreshProgress } from '../lib/dataService';
 import { getActionBadge, getFlags, type RuleInputs } from '../lib/rules';
 import { exportDbBytes, exportJson, importDbBytes, importJson } from '../lib/exportImport';
 import type { AlertItem, RegimeSummary } from '../lib/types';
@@ -13,6 +13,12 @@ import defaultSettings from '../settings/defaultSettings.json';
 export default function Dashboard() {
   const { setLoading, setLastRefresh } = useApp();
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshProgress, setRefreshProgress] = useState<{
+    current: string;
+    completed: number;
+    total: number;
+    stage: string;
+  } | null>(null);
   const [regimeSummary, setRegimeSummary] = useState<RegimeSummary | null>(null);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [portfolioValue, setPortfolioValue] = useState(0);
@@ -144,9 +150,43 @@ export default function Dashboard() {
         ...positions.map(p => p.symbol)
       ];
       
-      await refreshAllData([...new Set(symbols)]);
+      const uniqueSymbols = [...new Set(symbols)];
+      
+      // Track progress
+      let completed = 0;
+      setRefreshProgress({
+        current: '',
+        completed: 0,
+        total: uniqueSymbols.length,
+        stage: 'Starting...'
+      });
+      
+      const onProgress = (progress: RefreshProgress) => {
+        if (progress.stage === 'success' || progress.stage === 'failed') {
+          completed++;
+        }
+        
+        const stageText = 
+          progress.stage === 'queued' ? 'Queued' :
+          progress.stage === 'fetching_prices' ? 'Fetching prices' :
+          progress.stage === 'fetching_fundamentals' ? 'Fetching fundamentals' :
+          progress.stage === 'success' ? 'Complete' :
+          progress.stage === 'failed' ? 'Failed' : 'Processing';
+        
+        setRefreshProgress({
+          current: progress.symbol,
+          completed,
+          total: uniqueSymbols.length,
+          stage: stageText
+        });
+      };
+      
+      await refreshAllData(uniqueSymbols, onProgress);
       await loadData();
       setLastRefresh(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
+      
+      // Clear progress after a brief delay
+      setTimeout(() => setRefreshProgress(null), 2000);
     } catch (err) {
       console.error('Refresh failed:', err);
     } finally {
@@ -278,6 +318,38 @@ export default function Dashboard() {
           </div>
         }
       />
+
+      {/* Refresh Progress Indicator */}
+      {refreshProgress && (
+        <div className="card bg-slate-900/80 border-cyan-500/30">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse"></div>
+              <span className="text-sm font-semibold text-cyan-200">
+                Refreshing data ({refreshProgress.completed}/{refreshProgress.total})
+              </span>
+            </div>
+            <span className="text-xs text-slate-400">
+              {Math.round((refreshProgress.completed / refreshProgress.total) * 100)}%
+            </span>
+          </div>
+          <div className="w-full bg-slate-800 rounded-full h-2 mb-2">
+            <div 
+              className="bg-cyan-500 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${(refreshProgress.completed / refreshProgress.total) * 100}%` }}
+            ></div>
+          </div>
+          <div className="text-xs text-slate-400">
+            {refreshProgress.current && (
+              <span>
+                <span className="text-cyan-300 font-medium">{refreshProgress.current}</span>
+                {' - '}
+                <span>{refreshProgress.stage}</span>
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
         <div className="card">

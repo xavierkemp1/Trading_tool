@@ -468,13 +468,16 @@ export default function Settings() {
           <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
             <p className="text-xs font-medium text-slate-300">API Configuration</p>
             <p className="mt-2 text-xs text-slate-400">
-              Configure OpenAI API key in your <code className="rounded bg-slate-800 px-1 py-0.5">.env</code> file:
+              Configure OpenAI API key in your server environment variables (NOT as VITE_ variable):
             </p>
             <ul className="mt-2 space-y-1 text-xs text-slate-400">
-              <li>• VITE_OPENAI_API_KEY</li>
+              <li>• <code className="rounded bg-slate-800 px-1 py-0.5">OPENAI_API_KEY</code> (server-side only for security)</li>
             </ul>
             <p className="mt-2 text-xs text-slate-400">
               Get API key at: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">https://platform.openai.com/api-keys</a>
+            </p>
+            <p className="mt-2 text-xs text-amber-400">
+              ⚠️ Make sure the proxy server is running (<code className="rounded bg-slate-800 px-1 py-0.5">npm run server</code>) for AI features to work.
             </p>
           </div>
         </div>
