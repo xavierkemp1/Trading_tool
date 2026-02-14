@@ -14,6 +14,7 @@ export interface Settings {
   riskManagement: {
     riskBasis: 'avg_cost' | 'current_price';
     maxRiskPctPerPosition: number;
+    maxTotalRiskPct: number;
   };
   dataQuality: {
     priceStaleMinutes: number;

@@ -9,6 +9,7 @@ import { getActionBadge, getFlags, type RuleInputs } from '../lib/rules';
 import { exportDbBytes, exportJson, importDbBytes, importJson } from '../lib/exportImport';
 import type { AlertItem, RegimeSummary } from '../lib/types';
 import defaultSettings from '../settings/defaultSettings.json';
+import { getSettings } from '../lib/settingsService';
 
 export default function Dashboard() {
   const { setLoading, setLastRefresh } = useApp();
@@ -23,6 +24,10 @@ export default function Dashboard() {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [portfolioValue, setPortfolioValue] = useState(0);
   const [portfolioChange, setPortfolioChange] = useState(0);
+  const [totalOpenRiskDollars, setTotalOpenRiskDollars] = useState(0);
+  const [totalOpenRiskPct, setTotalOpenRiskPct] = useState(0);
+  const [riskContributors, setRiskContributors] = useState<Array<{ symbol: string; riskDollars: number; riskPct: number }>>([]);
+  const [themeConcentration, setThemeConcentration] = useState<Array<{ theme: string; value: number; pct: number }>>([]);
 
   const loadData = useCallback(async () => {
     try {
@@ -85,6 +90,78 @@ export default function Dashboard() {
       setPortfolioValue(totalValue);
       setPortfolioChange(totalValue - totalCost);
       setAlerts(positionAlerts.slice(0, 10)); // Cap at 10
+      
+      // Calculate portfolio-level risk
+      const settings = getSettings();
+      let totalRiskDollars = 0;
+      const contributors: Array<{ symbol: string; riskDollars: number; riskPct: number }> = [];
+      
+      for (const position of positions) {
+        if (position.invalidation && position.avg_cost > position.invalidation) {
+          const riskPerShare = position.avg_cost - position.invalidation;
+          const positionRiskDollars = riskPerShare * position.qty;
+          totalRiskDollars += positionRiskDollars;
+          
+          contributors.push({
+            symbol: position.symbol,
+            riskDollars: positionRiskDollars,
+            riskPct: totalValue > 0 ? (positionRiskDollars / totalValue) * 100 : 0
+          });
+        }
+      }
+      
+      // Sort contributors by risk dollars (descending) and take top 5
+      const topContributors = contributors.sort((a, b) => b.riskDollars - a.riskDollars).slice(0, 5);
+      
+      setTotalOpenRiskDollars(totalRiskDollars);
+      setTotalOpenRiskPct(totalValue > 0 ? (totalRiskDollars / totalValue) * 100 : 0);
+      setRiskContributors(topContributors);
+      
+      // Calculate theme concentration
+      const themeValues: Record<string, number> = {};
+      for (const position of positions) {
+        const latestPrice = getLatestPrice(position.symbol);
+        if (latestPrice && position.thesis_tag) {
+          const positionValue = latestPrice.close * position.qty;
+          themeValues[position.thesis_tag] = (themeValues[position.thesis_tag] || 0) + positionValue;
+        }
+      }
+      
+      const themeConcentrations = Object.entries(themeValues).map(([theme, value]) => ({
+        theme,
+        value,
+        pct: totalValue > 0 ? (value / totalValue) * 100 : 0
+      })).sort((a, b) => b.value - a.value);
+      
+      setThemeConcentration(themeConcentrations);
+      
+      // Add alerts for risk budget exceeded
+      if (totalValue > 0) {
+        const totalRiskPct = (totalRiskDollars / totalValue) * 100;
+        if (totalRiskPct > settings.riskManagement.maxTotalRiskPct) {
+          positionAlerts.push({
+            id: 'portfolio-risk-exceeded',
+            symbol: 'PORTFOLIO',
+            message: `Total portfolio risk (${totalRiskPct.toFixed(2)}%) exceeds limit (${settings.riskManagement.maxTotalRiskPct}%)`,
+            severity: 'danger'
+          });
+        }
+        
+        // Check theme concentration
+        for (const { theme, pct } of themeConcentrations) {
+          if (pct > settings.riskBands.maxThemePct) {
+            positionAlerts.push({
+              id: `theme-concentration-${theme}`,
+              symbol: 'PORTFOLIO',
+              message: `${theme} concentration (${pct.toFixed(2)}%) exceeds limit (${settings.riskBands.maxThemePct}%)`,
+              severity: 'warn'
+            });
+          }
+        }
+      }
+      
+      // Update alerts with new portfolio-level warnings (still capped at 10)
+      setAlerts(positionAlerts.slice(0, 10));
       
       // Calculate regime based on benchmarks
       const benchmarks = defaultSettings.benchmarks;
@@ -378,6 +455,114 @@ export default function Dashboard() {
             <StatPill label="Total gain/loss" value={portfolioChange !== 0 ? `${portfolioChange >= 0 ? '+' : ''}$${portfolioChange.toLocaleString()}` : '—'} />
             <StatPill label="Positions" value={`${getAllPositions().length}`} />
           </div>
+        </div>
+      </div>
+
+      {/* Portfolio Risk Budget */}
+      <div className="card">
+        <SectionHeader title="Portfolio Risk Budget" subtitle="Monitor total risk exposure and theme concentration" />
+        <div className="mt-4 space-y-4">
+          {/* Overall Risk Metrics */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold text-slate-300 uppercase">Total Open Risk</h4>
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-2xl font-bold ${totalOpenRiskPct > getSettings().riskManagement.maxTotalRiskPct ? 'text-rose-400' : 'text-cyan-300'}`}>
+                    {totalOpenRiskPct.toFixed(2)}%
+                  </span>
+                  <span className="text-sm text-slate-400">
+                    (${totalOpenRiskDollars.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-400">Limit:</span>
+                  <span className="font-medium text-slate-300">{getSettings().riskManagement.maxTotalRiskPct}%</span>
+                </div>
+                {totalOpenRiskPct > getSettings().riskManagement.maxTotalRiskPct && (
+                  <div className="mt-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-xs text-rose-200">
+                    ⚠️ Risk budget exceeded
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold text-slate-300 uppercase">Positions with Risk Defined</h4>
+                <div className="text-2xl font-bold text-slate-100">
+                  {riskContributors.length}
+                </div>
+                <p className="text-xs text-slate-400">
+                  Positions with invalidation price set
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Top Risk Contributors */}
+          {riskContributors.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-xs font-semibold text-slate-300 uppercase">Top Risk Contributors</h4>
+              <div className="space-y-2">
+                {riskContributors.map((contributor) => (
+                  <div
+                    key={contributor.symbol}
+                    className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="font-semibold text-slate-100">{contributor.symbol}</span>
+                      <span className="text-xs text-slate-400">
+                        ${contributor.riskDollars.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <span className="text-sm font-medium text-slate-300">
+                      {contributor.riskPct.toFixed(2)}% of portfolio
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Theme Concentration */}
+          {themeConcentration.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-xs font-semibold text-slate-300 uppercase">Theme Concentration</h4>
+              <div className="space-y-2">
+                {themeConcentration.map((theme) => (
+                  <div
+                    key={theme.theme}
+                    className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="font-semibold text-slate-100">{theme.theme}</span>
+                      <span className="text-xs text-slate-400">
+                        ${theme.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-medium ${theme.pct > getSettings().riskBands.maxThemePct ? 'text-amber-400' : 'text-slate-300'}`}>
+                        {theme.pct.toFixed(2)}%
+                      </span>
+                      {theme.pct > getSettings().riskBands.maxThemePct && (
+                        <span className="text-xs text-amber-400">⚠️</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Warning threshold: {getSettings().riskBands.maxThemePct}% per theme
+              </p>
+            </div>
+          )}
+
+          {riskContributors.length === 0 && (
+            <div className="rounded-lg border border-slate-700 bg-slate-800/30 px-4 py-3 text-sm text-slate-400">
+              No positions have invalidation prices set. Add invalidation prices to track risk exposure.
+            </div>
+          )}
         </div>
       </div>
 
