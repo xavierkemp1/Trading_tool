@@ -80,8 +80,3 @@ export function testSplitDetection(): void {
   
   console.log('=== Split Detection Tests Complete ===');
 }
-
-// Auto-run if executed directly (for ts-node usage)
-if (require.main === module) {
-  testSplitDetection();
-}
