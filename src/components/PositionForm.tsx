@@ -1,4 +1,4 @@
-import { useState, FormEvent, useEffect, useRef } from 'react';
+import { useState, FormEvent, useEffect, useRef, useMemo } from 'react';
 import { addPosition, updatePosition, getAllPositions, getAllWatchlist, getLatestPrice, type Position } from '../lib/db';
 import { fetchCurrentPrice } from '../lib/dataService';
 import type { ThesisTag, TimeHorizon } from '../lib/types';
@@ -32,24 +32,26 @@ export default function PositionForm({ position, onSave, onCancel }: PositionFor
   const [error, setError] = useState<string | null>(null);
   const [validatingSymbol, setValidatingSymbol] = useState(false);
   
-  // Calculate portfolio value
-  const portfolioValue = getAllPositions().reduce((total, pos) => {
-    const latestPrice = getLatestPrice(pos.symbol);
-    if (latestPrice) {
-      return total + (latestPrice.close * pos.qty);
-    }
-    return total;
-  }, 0);
+  // Calculate portfolio value (memoized to avoid recalculation on every render)
+  const portfolioValue = useMemo(() => {
+    return getAllPositions().reduce((total, pos) => {
+      const latestPrice = getLatestPrice(pos.symbol);
+      if (latestPrice) {
+        return total + (latestPrice.close * pos.qty);
+      }
+      return total;
+    }, 0);
+  }, []);
 
   // Calculate risk metrics
   const riskPerShare = formData.avgCost && formData.invalidation 
     ? formData.avgCost - formData.invalidation 
     : 0;
-  const maxRiskDollars = portfolioValue * (formData.riskPct / 100);
-  const recommendedQty = riskPerShare > 0 ? Math.floor(maxRiskDollars / riskPerShare) : 0;
-  const recommendedPositionValue = recommendedQty * formData.avgCost;
+  const maxRiskDollars = (formData.riskPct && portfolioValue) ? portfolioValue * (formData.riskPct / 100) : 0;
+  const recommendedQty = riskPerShare > 0 && maxRiskDollars > 0 ? Math.floor(maxRiskDollars / riskPerShare) : 0;
+  const recommendedPositionValue = formData.avgCost ? recommendedQty * formData.avgCost : 0;
   const recommendedPositionPct = portfolioValue > 0 ? (recommendedPositionValue / portfolioValue) * 100 : 0;
-  const currentPositionValue = formData.qty * formData.avgCost;
+  const currentPositionValue = formData.avgCost ? formData.qty * formData.avgCost : 0;
   const currentPositionPct = portfolioValue > 0 ? (currentPositionValue / portfolioValue) * 100 : 0;
   
   // Validation checks
