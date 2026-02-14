@@ -24,6 +24,7 @@ export {
   type WatchlistEntry,
   type JournalEntry,
   type AIReview,
+  type Quote,
   
   // Symbols
   upsertSymbol,
@@ -64,5 +65,11 @@ export {
   getAllJournalEntries,
   getJournalEntriesBySymbol,
   deleteJournalEntry,
-  updateJournalEntry
+  updateJournalEntry,
+  
+  // Quotes
+  upsertQuote,
+  getQuote,
+  getAllQuotes,
+  deleteQuote
 } from '../dbOperations';

@@ -3,10 +3,11 @@ import schemaSQL from './db/migrations/001_init.sql';
 import migration002 from './db/migrations/002_data_quality.sql';
 import migration003 from './db/migrations/003_corporate_actions.sql';
 import migration004 from './db/migrations/004_journal_performance.sql';
+import migration005 from './db/migrations/005_live_quotes.sql';
 import { getDbBytes, setDbBytes, clearDbBytes, IDB_NAME, IDB_STORE } from './idbStore';
 
 const DB_KEY = 'trading_app_db'; // Keep for migration from localStorage
-export const DB_VERSION = 4; // Updated to version 4 for journal performance tracking.
+export const DB_VERSION = 5; // Updated to version 5 for live quotes support.
 const MAX_FILE_PATH_LENGTH = 100; // Max length to distinguish file paths from SQL content
 const SAVE_DEBOUNCE_MS = 2000; // Debounce database saves by 2 seconds
 
@@ -15,7 +16,8 @@ const MIGRATIONS = [
   { version: 1, sql: schemaSQL, description: 'Initial schema' },
   { version: 2, sql: migration002, description: 'Data quality tracking' },
   { version: 3, sql: migration003, description: 'Corporate actions tracking' },
-  { version: 4, sql: migration004, description: 'Journal performance tracking' }
+  { version: 4, sql: migration004, description: 'Journal performance tracking' },
+  { version: 5, sql: migration005, description: 'Live quotes support' }
 ];
 
 let dbInstance: Database | null = null;
